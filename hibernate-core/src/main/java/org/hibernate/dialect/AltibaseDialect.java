@@ -32,13 +32,13 @@ public class AltibaseDialect extends Dialect {
 
 	public AltibaseDialect() {
 		super();
+
 		registerCharacterTypeMappings();
 		registerNumericTypeMappings();
 		registerDateTimeTypeMappings();
 		registerLargeObjectTypeMappings();
-
+		registerBooleanTypeMapping();
 		registerFunctions();
-
 		registerDefaultProperties();
 	}
 
@@ -75,6 +75,9 @@ public class AltibaseDialect extends Dialect {
 		registerColumnType( Types.CLOB, "clob" );
 	}
 
+	protected void registerBooleanTypeMapping() {
+		registerColumnType( Types.BOOLEAN, "char(1)" );
+	}
 
 	protected void registerFunctions() {
 		registerFunction( "abs", new StandardSQLFunction("abs", StandardBasicTypes.DOUBLE) );
@@ -260,12 +263,15 @@ public class AltibaseDialect extends Dialect {
 				+ " select synonym_name from system_.sys_synonyms_ where "
 				+ " object_name in (select table_name from system_.sys_tables_ where table_type='S')";
 	}
-  public boolean supportsLimit() {
+
+	public boolean supportsLimit() {
 		return true;
 	}
+
 	public boolean supportsLimitOffset() {
 		return true;
 	}
+
 	public boolean bindLimitParametersInReverseOrder() {
 		return false;
 	}
@@ -273,30 +279,32 @@ public class AltibaseDialect extends Dialect {
 	public boolean useMaxForLimit() {
 		return true;
 	}
+
 	public boolean bindLimitParametersFirst() {
 		return true;
 	}
 
-  public boolean supportsVariableLimit() {
+	public boolean supportsVariableLimit() {
 		return false;
 	}
 
-
-  public String getLimitString(String query, int offset, int limit) {
+	public String getLimitString(String query, int offset, int limit) {
 		StringBuffer sb = new StringBuffer( query.length() + 20 );
-		sb.append(query);
-		if(offset<=0){
-			sb.append(" limit 1, "+(limit-offset));
-		}else if(limit-offset <=0){
-			sb.append(" limit 1");
-		}else{
-			sb.append(" limit "+(offset+1)+", "+(limit-offset));
+		sb.append( query );
+		if ( offset <= 0) {
+			sb.append( " limit 1, " + ( limit - offset ) );
+		}
+		else if ( limit - offset <= 0 ) {
+			sb.append( " limit 1" );
+		}
+		else{
+			sb.append( " limit " + ( offset ) + ", " + ( limit - offset ) );
 		}
 
 		return sb.toString();
 	}
 
-  public int registerResultSetOutParameter(CallableStatement statement, int col) throws SQLException {
+	public int registerResultSetOutParameter(CallableStatement statement, int col) throws SQLException {
 		return col;
 	} 
 	
