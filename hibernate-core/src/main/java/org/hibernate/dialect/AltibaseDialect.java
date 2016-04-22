@@ -1,4 +1,9 @@
-
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.dialect;
 
 import java.sql.Types;
@@ -8,53 +13,46 @@ import java.sql.CallableStatement;
 
 import org.hibernate.sql.CaseFragment;
 import org.hibernate.sql.DecodeCaseFragment;
-import org.hibernate.sql.JoinFragment;
-import org.hibernate.sql.OracleJoinFragment;
 import org.hibernate.cfg.Environment;
 import org.hibernate.dialect.function.StandardSQLFunction;
 import org.hibernate.dialect.function.NoArgSQLFunction;
 import org.hibernate.dialect.function.VarArgsSQLFunction;
-import org.hibernate.dialect.function.SQLFunctionTemplate;
-import org.hibernate.dialect.function.NvlFunction;
-import org.hibernate.HibernateException;
 import org.hibernate.type.StandardBasicTypes;
-import org.hibernate.util.ReflectHelper;
-import org.hibernate.exception.ViolatedConstraintNameExtracter;
-import org.hibernate.exception.TemplatedViolatedConstraintNameExtracter;
-import org.hibernate.exception.JDBCExceptionHelper;
 
 /**
- * A dialect for Altibase
+ * An SQL dialect for Altibase
  *
- * @author YounJung Park
+ * @author Youn Jung Park
  */
 public class AltibaseDialect extends Dialect {
-
+	/**
+	 * Constructs a AltibaseDialect
+	 */
 	public AltibaseDialect() {
 		super();
 
 		registerCharacterTypeMappings();
 		registerNumericTypeMappings();
 		registerDateTimeTypeMappings();
-		registerLargeObjectTypeMappings();
 		registerBooleanTypeMapping();
+		registerLargeObjectTypeMappings();
 		registerFunctions();
 		registerDefaultProperties();
 	}
 
 	protected void registerCharacterTypeMappings() {
 		registerColumnType( Types.CHAR, "char(1)" );
-		registerColumnType( Types.VARCHAR, 4000, "varchar2($l)" );
-		registerColumnType( Types.VARCHAR, "long" );
+		registerColumnType( Types.VARCHAR, 32767, "varchar($l)" );
+		registerColumnType( Types.VARCHAR, "clob" );
+		registerColumnType( Types.LONGVARCHAR, "varchar(32000)" );
 	}
 
 	protected void registerNumericTypeMappings() {
-		registerColumnType( Types.BIT, "bit" );
+		registerColumnType( Types.BIT, "number(1,0)" );
 		registerColumnType( Types.BIGINT, "bigint" );
 		registerColumnType( Types.SMALLINT, "smallint" );
 		registerColumnType( Types.TINYINT, "number(3,0)" );
 		registerColumnType( Types.INTEGER, "integer" );
-
 		registerColumnType( Types.FLOAT, "float" );
 		registerColumnType( Types.DOUBLE, "double" );
 		registerColumnType( Types.NUMERIC, "number($p,$s)" );
@@ -67,16 +65,14 @@ public class AltibaseDialect extends Dialect {
 		registerColumnType( Types.TIMESTAMP, "date" );
 	}
 
-	protected void registerLargeObjectTypeMappings() {
-		registerColumnType( Types.VARBINARY, "byte" );
-	
-
-		registerColumnType( Types.BLOB, "blob" );
-		registerColumnType( Types.CLOB, "clob" );
-	}
-
 	protected void registerBooleanTypeMapping() {
 		registerColumnType( Types.BOOLEAN, "char(1)" );
+	}
+
+	protected void registerLargeObjectTypeMappings() {
+		registerColumnType( Types.VARBINARY, "byte" );
+		registerColumnType( Types.BLOB, "blob" );
+		registerColumnType( Types.CLOB, "clob" );
 	}
 
 	protected void registerFunctions() {
@@ -114,7 +110,6 @@ public class AltibaseDialect extends Dialect {
 		registerFunction( "to_char", new StandardSQLFunction("to_char", StandardBasicTypes.STRING) );
 		registerFunction( "to_date", new StandardSQLFunction("to_date", StandardBasicTypes.TIMESTAMP) );
 
-
 		registerFunction( "last_day", new StandardSQLFunction("last_day", StandardBasicTypes.DATE) );
 		registerFunction( "sysdate", new NoArgSQLFunction("sysdate", StandardBasicTypes.DATE, false) );
 		registerFunction( "uid", new NoArgSQLFunction("user_id", StandardBasicTypes.INTEGER, false) );
@@ -122,7 +117,6 @@ public class AltibaseDialect extends Dialect {
 
 		registerFunction( "rownum", new NoArgSQLFunction("rownum", StandardBasicTypes.LONG, false) );
 
-		// Multi-param string dialect functions...
 		registerFunction( "concat", new VarArgsSQLFunction(StandardBasicTypes.STRING, "", "||", "") );
 		registerFunction( "instr", new StandardSQLFunction("instr", StandardBasicTypes.INTEGER) );
 		registerFunction( "instrb", new StandardSQLFunction("instrb", StandardBasicTypes.INTEGER) );
@@ -133,10 +127,8 @@ public class AltibaseDialect extends Dialect {
 		registerFunction( "substrb", new StandardSQLFunction("substrb", StandardBasicTypes.STRING) );
 		registerFunction( "translate", new StandardSQLFunction("translate", StandardBasicTypes.STRING) );
 
-		registerFunction( "substring", new StandardSQLFunction( "substr", StandardBasicTypes.STRING ) );
-		
+		registerFunction( "substring", new StandardSQLFunction("substr", StandardBasicTypes.STRING) );
 
-		// Multi-param numeric dialect functions...
 		registerFunction( "atan2", new StandardSQLFunction("atan2", StandardBasicTypes.FLOAT) );
 		registerFunction( "log", new StandardSQLFunction("log", StandardBasicTypes.INTEGER) );
 		registerFunction( "mod", new StandardSQLFunction("mod", StandardBasicTypes.INTEGER) );
@@ -144,7 +136,6 @@ public class AltibaseDialect extends Dialect {
 		registerFunction( "nvl2", new StandardSQLFunction("nvl2") );
 		registerFunction( "power", new StandardSQLFunction("power", StandardBasicTypes.FLOAT) );
 
-		// Multi-param date dialect functions...
 		registerFunction( "add_months", new StandardSQLFunction("add_months", StandardBasicTypes.DATE) );
 		registerFunction( "months_between", new StandardSQLFunction("months_between", StandardBasicTypes.FLOAT) );
 		registerFunction( "next_day", new StandardSQLFunction("next_day", StandardBasicTypes.DATE) );
@@ -155,18 +146,15 @@ public class AltibaseDialect extends Dialect {
 	protected void registerDefaultProperties() {
 		getDefaultProperties().setProperty( Environment.USE_STREAMS_FOR_BINARY, "true" );
 		getDefaultProperties().setProperty( Environment.STATEMENT_BATCH_SIZE, DEFAULT_BATCH_SIZE );
-		// Oracle driver reports to support getGeneratedKeys(), but they only
-		// support the version taking an array of the names of the columns to
-		// be returned (via its RETURNING clause).  No other driver seems to
-		// support this overloaded version.
 		getDefaultProperties().setProperty( Environment.USE_GET_GENERATED_KEYS, "false" );
 	}
 
-
+	@Override
 	public String getCrossJoinSeparator() {
 		return ", ";
 	}
 
+	@Override
 	public CaseFragment createCaseFragment() {
 		return new DecodeCaseFragment();
 	}
@@ -184,7 +172,7 @@ public class AltibaseDialect extends Dialect {
 	}
 
 	public String getSelectClauseNullString(int sqlType) {
-		switch(sqlType) {
+		switch (sqlType) {
 			case Types.VARCHAR:
 			case Types.CHAR:
 				return "to_char(null)";
@@ -197,68 +185,84 @@ public class AltibaseDialect extends Dialect {
 		}
 	}
 
+	@Override
 	public String getCurrentTimestampSelectString() {
 		return "select sysdate from dual";
 	}
 
+	@Override
 	public String getCurrentTimestampSQLFunctionName() {
 		return "sysdate";
 	}
 
+	@Override
 	public String getAddColumnString() {
-		return "add";
+		return "add (";
 	}
 
+	@Override
 	public String getSequenceNextValString(String sequenceName) {
 		return "select " + getSelectSequenceNextValString( sequenceName ) + " from dual";
 	}
 
+	@Override
 	public String getSelectSequenceNextValString(String sequenceName) {
 		return sequenceName + ".nextval";
 	}
 
+	@Override
 	public String getCreateSequenceString(String sequenceName) {
-		return "create sequence " + sequenceName; //starts with 1, implicitly
+		return "create sequence " + sequenceName;
 	}
 
+	@Override
 	public String getDropSequenceString(String sequenceName) {
 		return "drop sequence " + sequenceName;
 	}
 
+	@Override
 	public String getCascadeConstraintsString() {
 		return " cascade constraints";
 	}
 
+	@Override
 	public boolean dropConstraints() {
 		return false;
 	}
 
+	@Override
 	public String getForUpdateNowaitString() {
 		return " for update nowait";
 	}
 
+	@Override
 	public boolean supportsSequences() {
 		return true;
 	}
 
+	@Override
 	public boolean supportsPooledSequences() {
 		return true;
 	}
 
+	@Override
 	public String getForUpdateString(String aliases) {
 		return getForUpdateString();
 	}
 
+	@Override
 	public String getForUpdateNowaitString(String aliases) {
-		return getForUpdateString() ;
+		return getForUpdateString();
 	}
-	
+
+	@Override
 	public boolean forUpdateOfColumns() {
 		return true;
 	}
 
+	@Override
 	public String getQuerySequencesString() {
-		return    " select table_name from system_.sys_tables_ where table_type='S'"
+		return " select table_name from system_.sys_tables_ where table_type='S'"
 				+ "  union"
 				+ " select synonym_name from system_.sys_synonyms_ where "
 				+ " object_name in (select table_name from system_.sys_tables_ where table_type='S')";
@@ -289,57 +293,60 @@ public class AltibaseDialect extends Dialect {
 	}
 
 	public String getLimitString(String query, int offset, int limit) {
-		StringBuffer sb = new StringBuffer( query.length() + 20 );
+		StringBuilder sb = new StringBuilder( query.length() + 20 );
 		sb.append( query );
-		if ( offset <= 0) {
-			sb.append( " limit 1, " + ( limit - offset ) );
+		if ( offset <= 0 ) {
+			sb.append(" limit 1, ").append(limit - offset);
 		}
 		else if ( limit - offset <= 0 ) {
 			sb.append( " limit 1" );
 		}
-		else{
-			sb.append( " limit " + ( offset ) + ", " + ( limit - offset ) );
+		else {
+			sb.append( " limit " ).append( offset ).append(", ").append( limit - offset );
 		}
 
 		return sb.toString();
 	}
 
+
+	@Override
 	public int registerResultSetOutParameter(CallableStatement statement, int col) throws SQLException {
 		return col;
-	} 
-	
-	public ResultSet getResultSet(CallableStatement ps) throws SQLException {
-		ps.execute();
-		return ( ResultSet ) ps.getObject( 1 );
 	}
 
+	@Override
+	public ResultSet getResultSet(CallableStatement ps) throws SQLException {
+		ps.execute();
+		return (ResultSet)ps.getObject( 1 );
+	}
+
+	@Override
 	public boolean supportsUnionAll() {
 		return true;
 	}
 
+	@Override
 	public boolean supportsCommentOn() {
 		return true;
 	}
 
-	public boolean supportsTemporaryTables() {
-		return false;
-	}
-
+	@Override
 	public boolean supportsCurrentTimestampSelection() {
 		return true;
 	}
 
+	@Override
 	public boolean isCurrentTimestampSelectStringCallable() {
 		return false;
 	}
 
-
+	@Override
 	public boolean supportsEmptyInList() {
 		return false;
 	}
 
+	@Override
 	public boolean supportsExistsInSelect() {
 		return false;
 	}
-
 }
