@@ -171,6 +171,7 @@ public class AltibaseDialect extends Dialect {
 		return super.getSelectClauseNullString( sqlType );
 	}
 
+	@Override
 	public String getSelectClauseNullString(int sqlType) {
 		switch (sqlType) {
 			case Types.VARCHAR:
@@ -268,30 +269,37 @@ public class AltibaseDialect extends Dialect {
 				+ " object_name in (select table_name from system_.sys_tables_ where table_type='S')";
 	}
 
+	@Override
 	public boolean supportsLimit() {
 		return true;
 	}
 
+	@Override
 	public boolean supportsLimitOffset() {
 		return true;
 	}
 
+	@Override
 	public boolean bindLimitParametersInReverseOrder() {
 		return false;
 	}
 
+	@Override
 	public boolean useMaxForLimit() {
 		return true;
 	}
 
+	@Override
 	public boolean bindLimitParametersFirst() {
 		return true;
 	}
 
+	@Override
 	public boolean supportsVariableLimit() {
 		return false;
 	}
 
+	@Override
 	public String getLimitString(String query, int offset, int limit) {
 		StringBuilder sb = new StringBuilder( query.length() + 20 );
 		sb.append( query );
@@ -307,7 +315,6 @@ public class AltibaseDialect extends Dialect {
 
 		return sb.toString();
 	}
-
 
 	@Override
 	public int registerResultSetOutParameter(CallableStatement statement, int col) throws SQLException {
