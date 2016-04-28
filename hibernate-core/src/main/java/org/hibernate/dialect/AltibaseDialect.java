@@ -11,7 +11,7 @@ import java.sql.SQLException;
 import java.sql.ResultSet;
 import java.sql.CallableStatement;
 
-import org.hibernate.dialect.pagination.LegacyLimitHandler;
+import org.hibernate.dialect.pagination.AltibaseLimitHandler;
 import org.hibernate.dialect.pagination.LimitHandler;
 import org.hibernate.engine.spi.RowSelection;
 import org.hibernate.sql.CaseFragment;
@@ -262,47 +262,7 @@ public class AltibaseDialect extends Dialect {
 
 	@Override
 	public LimitHandler buildLimitHandler(String sql, RowSelection selection) {
-		return new LegacyLimitHandler( this, sql, selection );
-	}
-
-	public boolean supportsLimit() {
-		return true;
-	}
-
-	public boolean supportsLimitOffset() {
-		return true;
-	}
-
-	public boolean bindLimitParametersInReverseOrder() {
-		return false;
-	}
-
-	public boolean useMaxForLimit() {
-		return true;
-	}
-
-	public boolean bindLimitParametersFirst() {
-		return true;
-	}
-
-	public boolean supportsVariableLimit() {
-		return false;
-	}
-
-	public String getLimitString(String query, int offset, int limit) {
-		StringBuilder sb = new StringBuilder( query.length() + 20 );
-		sb.append( query );
-		if ( offset <= 0 ) {
-			sb.append(" limit 1, ").append(limit - offset);
-		}
-		else if ( limit - offset <= 0 ) {
-			sb.append( " limit 1" );
-		}
-		else {
-			sb.append( " limit " ).append( offset ).append(", ").append( limit - offset );
-		}
-
-		return sb.toString();
+		return new AltibaseLimitHandler( this, sql, selection);
 	}
 
 
