@@ -12,7 +12,7 @@ JPA specification, which is the standardized Java specification for ORM.  See
 Quickstart
 ==========
 
-     git clone git://github.com/hibernate/hibernate-orm.git
+     git clone git://github.com/ALTIBASE/hibernate-orm.git
      cd hibernate-orm
      ./gradlew clean build
 
