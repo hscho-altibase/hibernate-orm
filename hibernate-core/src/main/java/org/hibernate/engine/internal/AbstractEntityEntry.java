@@ -16,6 +16,7 @@ import org.hibernate.EntityMode;
 import org.hibernate.HibernateException;
 import org.hibernate.LockMode;
 import org.hibernate.Session;
+import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.engine.spi.CachedNaturalIdValueSource;
 import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.engine.spi.EntityEntryExtraState;
@@ -23,7 +24,7 @@ import org.hibernate.engine.spi.EntityKey;
 import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.engine.spi.SelfDirtinessTracker;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.engine.spi.SessionImplementor;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.engine.spi.Status;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.persister.entity.UniqueKeyLoadable;
@@ -297,7 +298,7 @@ public abstract class AbstractEntityEntry implements Serializable, EntityEntry {
 	}
 
 	@Override
-	public boolean isNullifiable(boolean earlyInsert, SessionImplementor session) {
+	public boolean isNullifiable(boolean earlyInsert, SharedSessionContractImplementor session) {
 		if ( getStatus() == Status.SAVING ) {
 			return true;
 		}
@@ -318,6 +319,15 @@ public abstract class AbstractEntityEntry implements Serializable, EntityEntry {
 			final int propertyIndex = ( (UniqueKeyLoadable) persister ).getPropertyIndex( propertyName );
 			return loadedState[propertyIndex];
 		}
+	}
+
+	@Override
+	public void overwriteLoadedStateCollectionValue(String propertyName, PersistentCollection collection) {
+		assert propertyName != null;
+		assert loadedState != null;
+
+		final int propertyIndex = ( (UniqueKeyLoadable) persister ).getPropertyIndex( propertyName );
+		loadedState[propertyIndex] = collection;
 	}
 
 	@Override

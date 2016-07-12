@@ -9,22 +9,22 @@ package org.hibernate.test.cache.infinispan.entity;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import junit.framework.AssertionFailedError;
 import org.hibernate.cache.infinispan.entity.EntityRegionImpl;
 import org.hibernate.cache.spi.access.AccessType;
 import org.hibernate.cache.spi.access.EntityRegionAccessStrategy;
 import org.hibernate.cache.spi.access.SoftLock;
-import org.hibernate.engine.spi.SessionImplementor;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+
 import org.hibernate.test.cache.infinispan.AbstractRegionAccessStrategyTest;
 import org.hibernate.test.cache.infinispan.NodeEnvironment;
 import org.hibernate.test.cache.infinispan.util.TestSynchronization;
 import org.hibernate.test.cache.infinispan.util.TestingKeyFactory;
 import org.junit.Test;
+import junit.framework.AssertionFailedError;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.mock;
 
 /**
  * Base class for tests of EntityRegionAccessStrategy impls.
@@ -97,7 +97,7 @@ public class EntityRegionAccessStrategyTest extends
 			@Override
 			public void run() {
 				try {
-					SessionImplementor session = mockedSession();
+					SharedSessionContractImplementor session = mockedSession();
 					withTx(localEnvironment, session, () -> {
 						assertNull(localAccessStrategy.get(session, KEY, session.getTimestamp()));
 
@@ -137,9 +137,9 @@ public class EntityRegionAccessStrategyTest extends
 
 		assertThreadsRanCleanly();
 
-		SessionImplementor s1 = mockedSession();
+		SharedSessionContractImplementor s1 = mockedSession();
 		assertEquals( VALUE2, localAccessStrategy.get(s1, KEY, s1.getTimestamp()));
-		SessionImplementor s2 = mockedSession();
+		SharedSessionContractImplementor s2 = mockedSession();
 		Object remoteValue = remoteAccessStrategy.get(s2, KEY, s2.getTimestamp());
 		if (isUsingInvalidation()) {
 			// invalidation command invalidates pending put
@@ -165,7 +165,7 @@ public class EntityRegionAccessStrategyTest extends
 			@Override
 			public void run() {
 				try {
-					SessionImplementor session = mockedSession();
+					SharedSessionContractImplementor session = mockedSession();
 					withTx(localEnvironment, session, () -> {
 						assertNull("Correct initial value", localAccessStrategy.get(session, KEY, session.getTimestamp()));
 
@@ -191,7 +191,7 @@ public class EntityRegionAccessStrategyTest extends
 			@Override
 			public void run() {
 				try {
-					SessionImplementor session = mockedSession();
+					SharedSessionContractImplementor session = mockedSession();
 					withTx(localEnvironment, session, () -> {
 						readLatch.await();
 
@@ -219,14 +219,14 @@ public class EntityRegionAccessStrategyTest extends
 
 		assertThreadsRanCleanly();
 
-		SessionImplementor s1 = mockedSession();
+		SharedSessionContractImplementor s1 = mockedSession();
 		assertEquals("Correct node1 value", VALUE1, localAccessStrategy.get(s1, KEY, s1.getTimestamp()));
 		Object expected = isUsingInvalidation() ? null : VALUE1;
-		SessionImplementor s2 = mockedSession();
+		SharedSessionContractImplementor s2 = mockedSession();
 		assertEquals("Correct node2 value", expected, remoteAccessStrategy.get(s2, KEY, s2.getTimestamp()));
 	}
 
-	protected void doInsert(EntityRegionAccessStrategy strategy, SessionImplementor session, Object key, String value, Object version) {
+	protected void doInsert(EntityRegionAccessStrategy strategy, SharedSessionContractImplementor session, Object key, String value, Object version) {
 		strategy.insert(session, key, value, null);
 		session.getTransactionCoordinator().getLocalSynchronizations().registerSynchronization(
 				new TestSynchronization.AfterInsert(strategy, session, key, value, version));
@@ -237,7 +237,7 @@ public class EntityRegionAccessStrategyTest extends
 
 		Object expected = isUsingInvalidation() ? null : VALUE1;
 
-		SessionImplementor session = mockedSession();
+		SharedSessionContractImplementor session = mockedSession();
 		withTx(localEnvironment, session, () -> {
 			assertNull(localAccessStrategy.get(session, KEY, session.getTimestamp()));
 			if (minimal)
@@ -247,9 +247,9 @@ public class EntityRegionAccessStrategyTest extends
 			return null;
 		});
 
-		SessionImplementor s2 = mockedSession();
+		SharedSessionContractImplementor s2 = mockedSession();
 		assertEquals(VALUE1, localAccessStrategy.get(s2, KEY, s2.getTimestamp()));
-		SessionImplementor s3 = mockedSession();
+		SharedSessionContractImplementor s3 = mockedSession();
 		assertEquals(expected, remoteAccessStrategy.get(s3, KEY, s3.getTimestamp()));
 	}
 
@@ -262,9 +262,9 @@ public class EntityRegionAccessStrategyTest extends
 		final Object KEY = generateNextKey();
 
 		// Set up initial state
-		SessionImplementor s1 = mockedSession();
+		SharedSessionContractImplementor s1 = mockedSession();
 		localAccessStrategy.putFromLoad(s1, KEY, VALUE1, s1.getTimestamp(), 1);
-		SessionImplementor s2 = mockedSession();
+		SharedSessionContractImplementor s2 = mockedSession();
 		remoteAccessStrategy.putFromLoad(s2, KEY, VALUE1, s2.getTimestamp(), 1);
 
 		// Let the async put propagate
@@ -278,7 +278,7 @@ public class EntityRegionAccessStrategyTest extends
 			@Override
 			public void run() {
 				try {
-					SessionImplementor session = mockedSession();
+					SharedSessionContractImplementor session = mockedSession();
 					withTx(localEnvironment, session, () -> {
 						log.debug("Transaction began, get initial value");
 						assertEquals("Correct initial value", VALUE1, localAccessStrategy.get(session, KEY, session.getTimestamp()));
@@ -309,14 +309,14 @@ public class EntityRegionAccessStrategyTest extends
 			@Override
 			public void run() {
 				try {
-					SessionImplementor session = mockedSession();
+					SharedSessionContractImplementor session = mockedSession();
 					withTx(localEnvironment, session, () -> {
 						log.debug("Transaction began, await read latch");
 						readLatch.await();
 						log.debug("Read latch acquired, verify local access strategy");
 
 						// This won't block w/ mvc and will read the old value (if transactional as the transaction
-						// is not being committed yet, or if non-strict as we do the actual update only after transaction)
+						// is not being committed yet, or if non-strict as we do the actual update only afterQuery transaction)
 						// or null if non-transactional
 						Object expected = isTransactional() || accessType == AccessType.NONSTRICT_READ_WRITE ? VALUE1 : null;
 						assertEquals("Correct value", expected, localAccessStrategy.get(session, KEY, session.getTimestamp()));
@@ -345,14 +345,14 @@ public class EntityRegionAccessStrategyTest extends
 
 		assertThreadsRanCleanly();
 
-		SessionImplementor s3 = mockedSession();
+		SharedSessionContractImplementor s3 = mockedSession();
 		assertEquals("Correct node1 value", VALUE2, localAccessStrategy.get(s3, KEY, s3.getTimestamp()));
 		Object expected = isUsingInvalidation() ? null : VALUE2;
-		SessionImplementor s4 = mockedSession();
+		SharedSessionContractImplementor s4 = mockedSession();
 		assertEquals("Correct node2 value", expected, remoteAccessStrategy.get(s4, KEY, s4.getTimestamp()));
 	}
 
-	protected void doUpdate(EntityRegionAccessStrategy strategy, SessionImplementor session, Object key, Object value, Object version) throws javax.transaction.RollbackException, javax.transaction.SystemException {
+	protected void doUpdate(EntityRegionAccessStrategy strategy, SharedSessionContractImplementor session, Object key, Object value, Object version) throws javax.transaction.RollbackException, javax.transaction.SystemException {
 		SoftLock softLock = strategy.lockItem(session, key, null);
 		strategy.update(session, key, value, null, null);
 		session.getTransactionCoordinator().getLocalSynchronizations().registerSynchronization(
@@ -367,7 +367,7 @@ public class EntityRegionAccessStrategyTest extends
 
 		final Object KEY = TestingKeyFactory.generateEntityCacheKey(KEY_BASE + testCount++);
 
-		SessionImplementor s1 = mockedSession();
+		SharedSessionContractImplementor s1 = mockedSession();
 		localAccessStrategy.putFromLoad(s1, KEY, VALUE1, s1.getTimestamp(), 1);
 
 		final CountDownLatch pferLatch = new CountDownLatch(1);
@@ -379,7 +379,7 @@ public class EntityRegionAccessStrategyTest extends
 			@Override
 			public void run() {
 				try {
-					SessionImplementor session = mockedSession();
+					SharedSessionContractImplementor session = mockedSession();
 					withTx(localEnvironment, session, () -> {
 						assertEquals("Correct initial value", VALUE1, localAccessStrategy.get(session, KEY, session.getTimestamp()));
 
@@ -404,7 +404,7 @@ public class EntityRegionAccessStrategyTest extends
 			@Override
 			public void run() {
 				try {
-					SessionImplementor session = mockedSession();
+					SharedSessionContractImplementor session = mockedSession();
 					withTx(localEnvironment, session, () -> {
 						localAccessStrategy.putFromLoad(session, KEY, VALUE1, session.getTimestamp(), 1);
 						return null;
@@ -431,7 +431,7 @@ public class EntityRegionAccessStrategyTest extends
 
 		assertThreadsRanCleanly();
 
-		SessionImplementor session = mockedSession();
+		SharedSessionContractImplementor session = mockedSession();
 		assertEquals("Correct node1 value", VALUE2, localAccessStrategy.get(session, KEY, session.getTimestamp()));
 	}
 }

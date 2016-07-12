@@ -64,7 +64,7 @@ Internally Hibernate uses a registry of basic types when it needs to resolve a s
 |CharacterArrayNClobType |NCLOB |java.lang.Character[] |N/A
 |=======================================================================================================================================================================================================================================================================================
 
-.BasicTypes added by hibernate-java8
+.Java 8 BasicTypes
 [cols=",,,",options="header",]
 |=================================================================================================
 |Hibernate type (org.hibernate.type package) |JDBC type |Java type |BasicTypeRegistry key(s)
@@ -78,13 +78,7 @@ Internally Hibernate uses a registry of basic types when it needs to resolve a s
 |OffsetTimeType |TIMESTAMP |java.time.ZonedDateTime |ZonedDateTime, java.time.ZonedDateTime
 |=================================================================================================
 
-[NOTE]
-====
-To use these hibernate-java8 types just add the `hibernate-java8` dependency to your classpath and Hibernate will take care of the rest.
-See <<basic-datetime>> for more about Java 8 Date/Time types.
-====
-
-.BasicTypes added by hibernate-spatial
+.Hibernate Spatial BasicTypes
 [cols=",,,",options="header",]
 |=================================================================================================
 |Hibernate type (org.hibernate.spatial package) |JDBC type |Java type |BasicTypeRegistry key(s)
@@ -157,13 +151,13 @@ As long as the type is not primitive, Hibernate takes this to mean that the unde
 `fetch` - FetchType (defaults to EAGER):: Defines whether this attribute should be fetched eagerly or lazily.
 JPA says that EAGER is a requirement to the provider (Hibernate) that the value should be fetched when the owner is fetched, while LAZY is merely a hint that the value be fetched when the attribute is accessed.
 Hibernate ignores this setting for basic types unless you are using bytecode enhancement.
-See the <chapters/pc/BytecodeEnhancement.adoc#BytecodeEnhancement,BytecodeEnhancement>> for additional information on fetching and on bytecode enhancement.
+See the <<chapters/pc/BytecodeEnhancement.adoc#BytecodeEnhancement,BytecodeEnhancement>> for additional information on fetching and on bytecode enhancement.
 
 [[basic-column-annotation]]
 ==== The `@Column` annotation
 
 JPA defines rules for implicitly determining the name of tables and columns.
-For a detailed discussion of implicit naming see <<naming.adoc#naming,Naming>>.
+For a detailed discussion of implicit naming see <<chapters/domain/naming.adoc#naming,Naming>>.
 
 For basic type attributes, the implicit naming rule is that the column name is the same as the attribute name.
 If that implicit naming rule does not meet your requirements, you can explicitly tell Hibernate (and other providers) the column name to use.
@@ -951,19 +945,6 @@ If the `java.util.Date` marks a point in time, the `java.util.Calendar` takes in
 ===== Mapping Java 8 Date/Time Values
 
 Java 8 came with a new Date/Time API, offering support for instant dates, intervals, local and zoned Date/Time immutable instances, bundled in the `java.time` package.
-Hibernate added support for the new Date/Time API in a new module, which must be included with the following Maven dependency:
-
-.`hibernate-java8` Maven dependency
-====
-[source,xml]
-----
-<dependency>
-    <groupId>org.hibernate</groupId>
-    <artifactId>hibernate-java8</artifactId>
-    <version>${hibernate.version}</version>
-</dependency>
-----
-====
 
 The mapping between the standard SQL Date/Time types and the supported Java 8 Date/Time class types looks as follows;
 
@@ -1186,10 +1167,15 @@ include::{extrasdir}/basic/mapping-column-read-and-write-composite-type-persiste
 ====
 
 [[mapping-column-formula]]
-==== Formula
+==== @Formula
 
 Sometimes, you want the Database to do some computation for you rather than in the JVM, you might also create some kind of virtual column.
 You can use a SQL fragment (aka formula) instead of mapping a property into a column. This kind of property is read only (its value is calculated by your formula fragment)
+
+[NOTE]
+====
+You should be aware that the `@Formula` annotation takes a native SQL clause which can affect database portability.
+====
 
 [[mapping-column-formula-example]]
 .`@Formula` mapping usage
@@ -1219,6 +1205,69 @@ include::{extrasdir}/basic/mapping-column-formula-persistence-example.sql[]
 [NOTE]
 ====
 The SQL fragment can be as complex as you want and even include subselects.
+====
+
+[[mapping-column-where]]
+==== @Where
+
+Sometimes, you want to filter out entities or collections using a custom SQL criteria.
+This can be achieved using the `@Where` annotation, which can be applied to entities and collections.
+
+[[mapping-where-example]]
+.`@Where` mapping usage
+====
+[source, JAVA, indent=0]
+----
+include::{sourcedir}/basic/WhereTest.java[tags=mapping-where-example]
+----
+====
+
+If the database contains the following entities:
+
+[[mapping-where-persistence-example]]
+.Persisting an fetching entities with a `@Where` mapping
+====
+[source, JAVA, indent=0]
+----
+include::{sourcedir}/basic/WhereTest.java[tags=mapping-where-persistence-example]
+----
+
+[source, SQL, indent=0]
+----
+include::{extrasdir}/basic/mapping-where-persistence-example.sql[]
+----
+====
+
+When loading an `Account` entity, Hibernate is going to filter out all records that are not active.
+
+[[mapping-where-entity-query-example]]
+.Query entities mapped with `@Where`
+====
+[source, JAVA, indent=0]
+----
+include::{sourcedir}/basic/WhereTest.java[tags=mapping-where-entity-query-example]
+----
+
+[source, SQL, indent=0]
+----
+include::{extrasdir}/basic/mapping-where-entity-query-example.sql[]
+----
+====
+
+When fetching the `debitAccounts` or the `creditAccounts` collections, Hibernate is going to apply the `@Where` clause filtering criteria to the associated child entities.
+
+[[mapping-where-collection-query-example]]
+.Traversing collections mapped with `@Where`
+====
+[source, JAVA, indent=0]
+----
+include::{sourcedir}/basic/WhereTest.java[tags=mapping-where-collection-query-example]
+----
+
+[source, SQL, indent=0]
+----
+include::{extrasdir}/basic/mapping-where-collection-query-example.sql[]
+----
 ====
 
 [[mapping-column-any]]

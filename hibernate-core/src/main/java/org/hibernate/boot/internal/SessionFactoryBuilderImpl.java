@@ -46,18 +46,21 @@ import org.hibernate.engine.jdbc.env.spi.ExtractedDatabaseMetaData;
 import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.hql.spi.id.MultiTableBulkIdStrategy;
 import org.hibernate.internal.SessionFactoryImpl;
+import org.hibernate.internal.log.DeprecationLogger;
 import org.hibernate.internal.util.config.ConfigurationHelper;
 import org.hibernate.loader.BatchFetchStyle;
 import org.hibernate.proxy.EntityNotFoundDelegate;
 import org.hibernate.resource.jdbc.spi.PhysicalConnectionHandlingMode;
 import org.hibernate.resource.jdbc.spi.StatementInspector;
-import org.hibernate.resource.transaction.TransactionCoordinatorBuilder;
+import org.hibernate.resource.transaction.spi.TransactionCoordinatorBuilder;
 import org.hibernate.service.spi.ServiceRegistryImplementor;
 import org.hibernate.tuple.entity.EntityTuplizer;
 import org.hibernate.tuple.entity.EntityTuplizerFactory;
+
 import org.jboss.logging.Logger;
 
 import static org.hibernate.cfg.AvailableSettings.ACQUIRE_CONNECTIONS;
+import static org.hibernate.cfg.AvailableSettings.ALLOW_JTA_TRANSACTION_ACCESS;
 import static org.hibernate.cfg.AvailableSettings.AUTO_CLOSE_SESSION;
 import static org.hibernate.cfg.AvailableSettings.AUTO_EVICT_COLLECTION_CACHE;
 import static org.hibernate.cfg.AvailableSettings.AUTO_SESSION_EVENTS_LISTENER;
@@ -65,6 +68,7 @@ import static org.hibernate.cfg.AvailableSettings.BATCH_FETCH_STYLE;
 import static org.hibernate.cfg.AvailableSettings.BATCH_VERSIONED_DATA;
 import static org.hibernate.cfg.AvailableSettings.CACHE_REGION_PREFIX;
 import static org.hibernate.cfg.AvailableSettings.CHECK_NULLABILITY;
+import static org.hibernate.cfg.AvailableSettings.CONNECTION_HANDLING;
 import static org.hibernate.cfg.AvailableSettings.CUSTOM_ENTITY_DIRTINESS_STRATEGY;
 import static org.hibernate.cfg.AvailableSettings.DEFAULT_BATCH_FETCH_SIZE;
 import static org.hibernate.cfg.AvailableSettings.DEFAULT_ENTITY_MODE;
@@ -88,6 +92,7 @@ import static org.hibernate.cfg.AvailableSettings.QUERY_SUBSTITUTIONS;
 import static org.hibernate.cfg.AvailableSettings.RELEASE_CONNECTIONS;
 import static org.hibernate.cfg.AvailableSettings.SESSION_FACTORY_NAME;
 import static org.hibernate.cfg.AvailableSettings.SESSION_FACTORY_NAME_IS_JNDI;
+import static org.hibernate.cfg.AvailableSettings.SESSION_SCOPED_INTERCEPTOR;
 import static org.hibernate.cfg.AvailableSettings.STATEMENT_BATCH_SIZE;
 import static org.hibernate.cfg.AvailableSettings.STATEMENT_FETCH_SIZE;
 import static org.hibernate.cfg.AvailableSettings.STATEMENT_INSPECTOR;
@@ -101,6 +106,7 @@ import static org.hibernate.cfg.AvailableSettings.USE_SECOND_LEVEL_CACHE;
 import static org.hibernate.cfg.AvailableSettings.USE_SQL_COMMENTS;
 import static org.hibernate.cfg.AvailableSettings.USE_STRUCTURED_CACHE;
 import static org.hibernate.cfg.AvailableSettings.WRAP_RESULT_SETS;
+import static org.hibernate.cfg.AvailableSettings.ALLOW_UPDATE_OUTSIDE_TRANSACTION;
 import static org.hibernate.engine.config.spi.StandardConverters.BOOLEAN;
 
 /**
@@ -187,6 +193,12 @@ public class SessionFactoryBuilderImpl implements SessionFactoryBuilderImplement
 	@Override
 	public SessionFactoryBuilder applyInterceptor(Interceptor interceptor) {
 		this.options.interceptor = interceptor;
+		return this;
+	}
+
+	@Override
+	public SessionFactoryBuilder applyStatelessInterceptor(Class<? extends Interceptor> statelessInterceptorClass) {
+		this.options.statelessInterceptorClass = statelessInterceptorClass;
 		return this;
 	}
 
@@ -454,6 +466,12 @@ public class SessionFactoryBuilderImpl implements SessionFactoryBuilderImplement
 	}
 
 	@Override
+	public SessionFactoryBuilder allowOutOfTransactionUpdateOperations(boolean allow) {
+		this.options.allowOutOfTransactionUpdateOperations = allow;
+		return this;
+	}
+
+	@Override
 	@SuppressWarnings("unchecked")
 	public <T extends SessionFactoryBuilder> T unwrap(Class<T> type) {
 		return (T) this;
@@ -463,6 +481,16 @@ public class SessionFactoryBuilderImpl implements SessionFactoryBuilderImplement
 	public SessionFactory build() {
 		metadata.validate();
 		return new SessionFactoryImpl( metadata, buildSessionFactoryOptions() );
+	}
+
+	@Override
+	public void markAsJpaBootstrap() {
+		this.options.jpaBootstrap = true;
+	}
+
+	@Override
+	public void disableJtaTransactionAccess() {
+		this.options.jtaTransactionAccessEnabled = false;
 	}
 
 	@Override
@@ -482,12 +510,15 @@ public class SessionFactoryBuilderImpl implements SessionFactoryBuilderImplement
 		private Object validatorFactoryReference;
 
 		// SessionFactory behavior
+		private boolean jpaBootstrap;
 		private String sessionFactoryName;
 		private boolean sessionFactoryNameAlsoJndiName;
 
 		// Session behavior
 		private boolean flushBeforeCompletionEnabled;
 		private boolean autoCloseSessionEnabled;
+		private boolean jtaTransactionAccessEnabled;
+		private boolean allowOutOfTransactionUpdateOperations;
 
 		// (JTA) transaction handling
 		private boolean jtaTrackByThread;
@@ -496,13 +527,14 @@ public class SessionFactoryBuilderImpl implements SessionFactoryBuilderImplement
 		// Statistics/Interceptor/observers
 		private boolean statisticsEnabled;
 		private Interceptor interceptor;
+		private Class<? extends Interceptor> statelessInterceptorClass;
 		private StatementInspector statementInspector;
-		private List<SessionFactoryObserver> sessionFactoryObserverList = new ArrayList<SessionFactoryObserver>();
+		private List<SessionFactoryObserver> sessionFactoryObserverList = new ArrayList<>();
 		private BaselineSessionEventsListenerBuilder baselineSessionEventsListenerBuilder;	// not exposed on builder atm
 
 		// persistence behavior
 		private CustomEntityDirtinessStrategy customEntityDirtinessStrategy;
-		private List<EntityNameResolver> entityNameResolvers = new ArrayList<EntityNameResolver>();
+		private List<EntityNameResolver> entityNameResolvers = new ArrayList<>();
 		private EntityNotFoundDelegate entityNotFoundDelegate;
 		private boolean identifierRollbackEnabled;
 		private EntityMode defaultEntityMode;
@@ -517,6 +549,7 @@ public class SessionFactoryBuilderImpl implements SessionFactoryBuilderImplement
 		private NullPrecedence defaultNullPrecedence;
 		private boolean orderUpdatesEnabled;
 		private boolean orderInsertsEnabled;
+
 
 		// multi-tenancy
 		private MultiTenancyStrategy multiTenancyStrategy;
@@ -577,16 +610,18 @@ public class SessionFactoryBuilderImpl implements SessionFactoryBuilderImplement
 					BOOLEAN,
 					true
 			);
+			this.jtaTransactionAccessEnabled = cfgService.getSetting(
+					ALLOW_JTA_TRANSACTION_ACCESS,
+					BOOLEAN,
+					true
+			);
 
-			this.flushBeforeCompletionEnabled = cfgService.getSetting( FLUSH_BEFORE_COMPLETION, BOOLEAN, false );
+			this.flushBeforeCompletionEnabled = cfgService.getSetting( FLUSH_BEFORE_COMPLETION, BOOLEAN, true );
 			this.autoCloseSessionEnabled = cfgService.getSetting( AUTO_CLOSE_SESSION, BOOLEAN, false );
 
 			this.statisticsEnabled = cfgService.getSetting( GENERATE_STATISTICS, BOOLEAN, false );
-			this.interceptor = strategySelector.resolveDefaultableStrategy(
-					Interceptor.class,
-					configurationSettings.get( INTERCEPTOR ),
-					EmptyInterceptor.INSTANCE
-			);
+			this.interceptor = determineInterceptor( configurationSettings, strategySelector );
+			this.statelessInterceptorClass = determineStatelessInterceptorClass( configurationSettings, strategySelector );
 			this.statementInspector = strategySelector.resolveStrategy(
 					StatementInspector.class,
 					configurationSettings.get( STATEMENT_INSPECTOR )
@@ -707,39 +742,148 @@ public class SessionFactoryBuilderImpl implements SessionFactoryBuilderImplement
 			);
 			this.jdbcFetchSize = ConfigurationHelper.getInteger( STATEMENT_FETCH_SIZE, configurationSettings );
 
-			final ConnectionAcquisitionMode connectionAcquisitionMode = ConnectionAcquisitionMode.interpret(
-					ConfigurationHelper.getString(
-							ACQUIRE_CONNECTIONS,
-							configurationSettings,
-							ConnectionAcquisitionMode.AS_NEEDED.name()
-					)
-			);
-
-			final ConnectionReleaseMode connectionReleaseMode;
-			final String releaseModeName = ConfigurationHelper.getString( RELEASE_CONNECTIONS, configurationSettings, "auto" );
-			if ( "auto".equals( releaseModeName ) ) {
-				// nothing was specified (or someone happened to configure the "magic" value)
-				if ( connectionAcquisitionMode == ConnectionAcquisitionMode.IMMEDIATELY ) {
-					connectionReleaseMode = ConnectionReleaseMode.ON_CLOSE;
-				}
-				else {
-					connectionReleaseMode = serviceRegistry.getService( TransactionCoordinatorBuilder.class )
-							.getDefaultConnectionReleaseMode();
-				}
-			}
-			else {
-				connectionReleaseMode = ConnectionReleaseMode.parse( releaseModeName );
-			}
-			this.connectionHandlingMode = PhysicalConnectionHandlingMode.interpret( connectionAcquisitionMode, connectionReleaseMode );
+			this.connectionHandlingMode = interpretConnectionHandlingMode( configurationSettings, serviceRegistry );
 
 			this.commentsEnabled = ConfigurationHelper.getBoolean( USE_SQL_COMMENTS, configurationSettings );
 
 			this.preferUserTransaction = ConfigurationHelper.getBoolean( PREFER_USER_TRANSACTION, configurationSettings, false  );
+			this.allowOutOfTransactionUpdateOperations = ConfigurationHelper.getBoolean(
+					ALLOW_UPDATE_OUTSIDE_TRANSACTION,
+					configurationSettings,
+					false
+			);
+		}
+
+		private static Interceptor determineInterceptor(Map configurationSettings, StrategySelector strategySelector) {
+			Object setting = configurationSettings.get( INTERCEPTOR );
+			if ( setting == null ) {
+				// try the legacy (deprecated) JPA name
+				setting = configurationSettings.get( org.hibernate.jpa.AvailableSettings.INTERCEPTOR );
+				if ( setting != null ) {
+					DeprecationLogger.DEPRECATION_LOGGER.deprecatedSetting(
+							org.hibernate.jpa.AvailableSettings.INTERCEPTOR,
+							INTERCEPTOR
+					);
+				}
+			}
+
+			return strategySelector.resolveStrategy(
+					Interceptor.class,
+					setting
+			);
+		}
+
+		@SuppressWarnings("unchecked")
+		private static Class<? extends Interceptor> determineStatelessInterceptorClass(
+				Map configurationSettings,
+				StrategySelector strategySelector) {
+			Object setting = configurationSettings.get( SESSION_SCOPED_INTERCEPTOR );
+			if ( setting == null ) {
+				// try the legacy (deprecated) JPA name
+				setting = configurationSettings.get( org.hibernate.jpa.AvailableSettings.SESSION_INTERCEPTOR );
+				if ( setting != null ) {
+					DeprecationLogger.DEPRECATION_LOGGER.deprecatedSetting(
+							org.hibernate.jpa.AvailableSettings.SESSION_INTERCEPTOR,
+							SESSION_SCOPED_INTERCEPTOR
+					);
+				}
+			}
+
+			if ( setting == null ) {
+				return null;
+			}
+			else if ( setting instanceof Class ) {
+				return (Class<? extends Interceptor>) setting;
+			}
+			else {
+				return strategySelector.selectStrategyImplementor(
+						Interceptor.class,
+						setting.toString()
+				);
+			}
+
+		}
+
+		private PhysicalConnectionHandlingMode interpretConnectionHandlingMode(
+				Map configurationSettings,
+				StandardServiceRegistry serviceRegistry) {
+			final PhysicalConnectionHandlingMode specifiedHandlingMode = PhysicalConnectionHandlingMode.interpret(
+					configurationSettings.get( CONNECTION_HANDLING )
+			);
+
+			if ( specifiedHandlingMode != null ) {
+				return specifiedHandlingMode;
+			}
+
+
+			final TransactionCoordinatorBuilder transactionCoordinatorBuilder = serviceRegistry.getService( TransactionCoordinatorBuilder.class );
+
+			// see if the deprecated ConnectionAcquisitionMode/ConnectionReleaseMode were used..
+			final ConnectionAcquisitionMode specifiedAcquisitionMode = ConnectionAcquisitionMode.interpret(
+					configurationSettings.get( ACQUIRE_CONNECTIONS )
+			);
+			final ConnectionReleaseMode specifiedReleaseMode = ConnectionReleaseMode.interpret(
+					configurationSettings.get( RELEASE_CONNECTIONS )
+			);
+			if ( specifiedAcquisitionMode != null || specifiedReleaseMode != null ) {
+				return interpretConnectionHandlingMode( specifiedAcquisitionMode, specifiedReleaseMode, configurationSettings, transactionCoordinatorBuilder );
+			}
+
+			return transactionCoordinatorBuilder.getDefaultConnectionHandlingMode();
+		}
+
+		/**
+		 * @deprecated since 5.2
+		 */
+		@Deprecated
+		private PhysicalConnectionHandlingMode interpretConnectionHandlingMode(
+				ConnectionAcquisitionMode specifiedAcquisitionMode,
+				ConnectionReleaseMode specifiedReleaseMode,
+				Map configurationSettings,
+				TransactionCoordinatorBuilder transactionCoordinatorBuilder) {
+			DeprecationLogger.DEPRECATION_LOGGER.logUseOfDeprecatedConnectionHandlingSettings();
+
+			final ConnectionAcquisitionMode effectiveAcquisitionMode = specifiedAcquisitionMode == null
+					? ConnectionAcquisitionMode.AS_NEEDED
+					: specifiedAcquisitionMode;
+
+			final ConnectionReleaseMode effectiveReleaseMode;
+			if ( specifiedReleaseMode == null ) {
+				// check the actual setting.  If we get in here it *should* be "auto" or null
+				final String releaseModeName = ConfigurationHelper.getString( RELEASE_CONNECTIONS, configurationSettings, "auto" );
+				assert "auto".equalsIgnoreCase( releaseModeName );
+				// nothing was specified (or someone happened to configure the "magic" value)
+				if ( effectiveAcquisitionMode == ConnectionAcquisitionMode.IMMEDIATELY ) {
+					effectiveReleaseMode = ConnectionReleaseMode.ON_CLOSE;
+				}
+				else {
+					effectiveReleaseMode = transactionCoordinatorBuilder.getDefaultConnectionReleaseMode();
+				}
+			}
+			else {
+				effectiveReleaseMode = specifiedReleaseMode;
+			}
+
+			return PhysicalConnectionHandlingMode.interpret( effectiveAcquisitionMode, effectiveReleaseMode );
 		}
 
 		@Override
 		public StandardServiceRegistry getServiceRegistry() {
 			return serviceRegistry;
+		}
+
+		@Override
+		public boolean isJpaBootstrap() {
+			return jpaBootstrap;
+		}
+
+		@Override
+		public boolean isJtaTransactionAccessEnabled() {
+			return jtaTransactionAccessEnabled;
+		}
+
+		public boolean isAllowOutOfTransactionUpdateOperations() {
+			return allowOutOfTransactionUpdateOperations;
 		}
 
 		@Override
@@ -780,6 +924,11 @@ public class SessionFactoryBuilderImpl implements SessionFactoryBuilderImplement
 		@Override
 		public Interceptor getInterceptor() {
 			return interceptor == null ? EmptyInterceptor.INSTANCE : interceptor;
+		}
+
+		@Override
+		public Class<? extends Interceptor> getStatelessInterceptorImplementor() {
+			return statelessInterceptorClass;
 		}
 
 		@Override
@@ -1019,6 +1168,20 @@ public class SessionFactoryBuilderImpl implements SessionFactoryBuilderImplement
 	}
 
 	@Override
+	public boolean isJpaBootstrap() {
+		return options.isJpaBootstrap();
+	}
+
+	@Override
+	public boolean isJtaTransactionAccessEnabled() {
+		return options.isJtaTransactionAccessEnabled();
+	}
+
+	public boolean isAllowOutOfTransactionUpdateOperations() {
+		return options.isAllowOutOfTransactionUpdateOperations();
+	}
+
+	@Override
 	public Object getBeanManagerReference() {
 		return options.getBeanManagerReference();
 	}
@@ -1056,6 +1219,11 @@ public class SessionFactoryBuilderImpl implements SessionFactoryBuilderImplement
 	@Override
 	public Interceptor getInterceptor() {
 		return options.getInterceptor();
+	}
+
+	@Override
+	public Class<? extends Interceptor> getStatelessInterceptorImplementor() {
+		return options.getStatelessInterceptorImplementor();
 	}
 
 	@Override

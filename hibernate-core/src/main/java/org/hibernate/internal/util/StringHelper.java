@@ -6,20 +6,18 @@
  */
 package org.hibernate.internal.util;
 
-import org.hibernate.dialect.Dialect;
-import org.hibernate.internal.util.collections.ArrayHelper;
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.StringTokenizer;
+
+import org.hibernate.dialect.Dialect;
+import org.hibernate.internal.util.collections.ArrayHelper;
 
 public final class StringHelper {
 
@@ -46,7 +44,11 @@ public final class StringHelper {
 		if ( length == 0 ) {
 			return "";
 		}
-		StringBuilder buf = new StringBuilder( length * strings[0].length() )
+		// Allocate space for length * firstStringLength;
+		// If strings[0] is null, then its length is defined as 4, since that's the
+		// length of "null".
+		final int firstStringLength = strings[0] != null ? strings[0].length() : 4;
+		StringBuilder buf = new StringBuilder( length * firstStringLength )
 				.append( strings[0] );
 		for ( int i = 1; i < length; i++ ) {
 			buf.append( seperator ).append( strings[i] );
@@ -332,7 +334,7 @@ public final class StringHelper {
 		if ( name == null || !name.startsWith( qualifierBase ) ) {
 			return name;
 		}
-		return name.substring( qualifierBase.length() + 1 ); // +1 to start after the following '.'
+		return name.substring( qualifierBase.length() + 1 ); // +1 to start afterQuery the following '.'
 	}
 
 	/**
@@ -492,6 +494,13 @@ public final class StringHelper {
 			throw new NullPointerException( "prefix or name were null attempting to build qualified name" );
 		}
 		return prefix + '.' + name;
+	}
+
+	public static String qualifyConditionally(String prefix, String name) {
+		if ( name == null ) {
+			throw new NullPointerException( "name was null attempting to build qualified name" );
+		}
+		return isEmpty( prefix ) ? name : prefix + '.' + name;
 	}
 
 	public static String[] qualify(String prefix, String[] names) {

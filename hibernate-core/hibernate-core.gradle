@@ -1,3 +1,5 @@
+import org.apache.tools.ant.filters.ReplaceTokens
+
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
@@ -7,8 +9,16 @@
 apply plugin: 'antlr'
 apply plugin: 'hibernate-matrix-testing'
 
-apply plugin: 'version-injection'
 apply plugin: 'org.hibernate.build.gradle.xjc'
+
+configurations {
+    hibernateJpaModelGenTool {
+        description = "Dependencies for running the Hibernate JPA Metamodel Generator AnnotationProcessor tool"
+    }
+    tests {
+        description = 'Configuration for the produced test jar'
+    }
+}
 
 dependencies {
     compile( libraries.jpa )
@@ -25,31 +35,67 @@ dependencies {
     compile( libraries.dom4j )
     compile( libraries.commons_annotations )
 
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Java 9 ftw!
+    if ( JavaVersion.current().isJava9Compatible() ) {
+        // The JDK used to run Gradle is Java 9+, and we assume that that is the same
+        //		JDK for executing tasks
+        xjc( 'com.sun.xml.bind:jaxb-impl:2.2.11' )
+        xjc( 'org.glassfish.jaxb:jaxb-xjc:2.2.11' )
+        xjc( 'org.jvnet.jaxb2_commons:jaxb2-basics:0.11.0' )
+        xjc( 'org.jvnet.jaxb2_commons:jaxb2-basics-ant:0.11.0' )
+        xjc( 'javax:javaee-api:7.0' )
+
+        testCompile( 'com.sun.xml.bind:jaxb-impl:2.2.11' )
+        testCompile( 'org.glassfish.jaxb:jaxb-xjc:2.2.11' )
+        testCompile( 'org.jvnet.jaxb2_commons:jaxb2-basics:0.11.0' )
+        testCompile( 'org.jvnet.jaxb2_commons:jaxb2-basics-ant:0.11.0' )
+        testCompile( 'javax:javaee-api:7.0' )
+
+        testRuntime( 'com.sun.xml.bind:jaxb-impl:2.2.11' )
+        testRuntime( 'org.glassfish.jaxb:jaxb-xjc:2.2.11' )
+        testRuntime( 'org.jvnet.jaxb2_commons:jaxb2-basics:0.11.0' )
+        testRuntime( 'org.jvnet.jaxb2_commons:jaxb2-basics-ant:0.11.0' )
+        testRuntime( 'javax:javaee-api:7.0' )
+    }
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
     antlr( libraries.antlr )
 
     provided( libraries.jacc )
     provided( libraries.validation )
     provided( libraries.ant )
+    provided( "javax.enterprise:cdi-api:1.1-PFD" )
 
     testCompile( project(':hibernate-testing') )
+    testCompile( libraries.shrinkwrap_api )
+    testCompile( libraries.shrinkwrap )
     testCompile( libraries.validation )
     testCompile( libraries.jandex )
     testCompile( libraries.classmate )
     testCompile( libraries.mockito )
     testCompile( 'joda-time:joda-time:2.3' )
+    testCompile( "org.jboss.weld:weld-core:2.0.0.Beta6" )
+    testCompile( "org.jboss.weld.arquillian.container:arquillian-weld-ee-embedded-1.1:1.1.2.Final" )
+    compile( "javax.enterprise:cdi-api:1.1-PFD" ) {
+        // we need to force it to make sure we influence the one coming from arquillian
+        force=true
+    }
 
     testCompile( libraries.validator ) {
         // for test runtime
         transitive = true
     }
-    testRuntime( libraries.expression_language_api )
-    testRuntime( libraries.expression_language_impl )
 
     // for testing stored procedure support
     testCompile( libraries.derby )
 
+    testRuntime( "org.jboss.spec.javax.ejb:jboss-ejb-api_3.2_spec:1.0.0.Alpha2" )
+    testRuntime( libraries.expression_language_api )
+    testRuntime( libraries.expression_language_impl )
     testRuntime( 'jaxen:jaxen:1.1' )
     testRuntime( libraries.javassist )
+    testCompile( project( ':hibernate-jpamodelgen' ) )
 }
 
 mavenPom {
@@ -59,10 +105,6 @@ mavenPom {
 
 def osgiDescription() {
 	return mavenPom.description
-}
-
-versionInjection {
-    into( 'org.hibernate.Version', 'getVersionString' )
 }
 
 jar {
@@ -89,7 +131,10 @@ jar {
             'javax.naming.spi;resolution:=optional',
             'org.apache.tools.ant;resolution:=optional',
 			'org.apache.tools.ant.taskdefs;resolution:=optional',
-			'org.apache.tools.ant.types;resolution:=optional'
+			'org.apache.tools.ant.types;resolution:=optional',
+            '!javax.enterprise*',
+            'javax.enterprise.context.spi;resolution:=optional',
+            'javax.enterprise.inject.spi;resolution:=optional'
 
 //        // TODO: Uncomment once EntityManagerFactoryBuilderImpl no longer
 //        // uses ClassLoaderServiceImpl.
@@ -139,9 +184,38 @@ xjc {
 //sourceSets.main.sourceGeneratorsTask.dependsOn generateGrammarSource
 tasks.compile.dependsOn generateGrammarSource
 
+task copyBundleResources (type: Copy) {
+    ext.bundlesTargetDir = file( "${buildDir}/bundles" )
+    from file('src/test/bundles')
+    into bundlesTargetDir
+    ext.bundleTokens = dbBundle[db]
+    ext.bundleTokens["buildDirName"] = buildDir.absolutePath
+    filter( ReplaceTokens, tokens: bundleTokens);
+    doFirst {
+        bundlesTargetDir.mkdirs()
+    }
+}
+processTestResources.dependsOn copyBundleResources
 
-tasks."matrix_mariadb" {
-    beforeTest { descriptor ->
-        println "Starting test: " + descriptor
+task testJar(type: Jar, dependsOn: testClasses) {
+    classifier = 'test'
+    from sourceSets.test.output
+}
+
+artifacts {
+    tests testJar
+}
+
+if ( JavaVersion.current().isJava9Compatible() ) {
+    logger.warn( '[WARN] Skipping Javassist-related tests for hibernate-core due to Javassist JDK 9 incompatibility' )
+
+    // we need to exclude tests using Javassist enhancement, which does not properly support
+    // Java 9 yet - https://issues.jboss.org/browse/JASSIST-261
+    test {
+        // rather than wild-cards, keep an explicit list
+        exclude 'org/hibernate/jpa/test/enhancement/InterceptFieldClassFileTransformerTest.class'
+        exclude 'org/hibernate/jpa/test/enhancement/runtime/JpaRuntimeEnhancementTest.class'
+        exclude 'org/hibernate/test/bytecode/enhancement/EnhancerTest.class'
+        exclude 'org/hibernate/test/bytecode/enhancement/basic/BasicInSessionTest.class'
     }
 }

@@ -27,7 +27,7 @@ import org.junit.Test;
 
 import org.jboss.logging.Logger;
 
-import static org.hibernate.userguide.util.TransactionUtil.doInJPA;
+import static org.hibernate.testing.transaction.TransactionUtil.doInJPA;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -62,6 +62,15 @@ public class BatchTest extends BaseEntityManagerFunctionalTestCase {
 		doInJPA( this::entityManagerFactory, entityManager -> {
 			entityManager.persist( new Person( "Vlad" ) );
 			entityManager.persist( new Person( "Mihalcea" ) );
+		} );
+		doInJPA( this::entityManagerFactory, entityManager -> {
+			String oldName = "Vlad";
+			String newName = "Alexandru";
+			//tag::batch-session-jdbc-batch-size-example[]
+			entityManager
+				.unwrap( Session.class )
+				.setJdbcBatchSize( 10 );
+			//end::batch-session-jdbc-batch-size-example[]
 		} );
 		doInJPA( this::entityManagerFactory, entityManager -> {
 			String oldName = "Vlad";

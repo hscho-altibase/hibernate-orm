@@ -6,6 +6,8 @@
  */
 package org.hibernate.test.bytecode.enhancement;
 
+import org.hibernate.test.bytecode.enhancement.eviction.EvictionTestTask;
+import org.hibernate.test.bytecode.enhancement.access.MixedAccessTestTask;
 import org.hibernate.testing.FailureExpected;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.bytecode.enhancement.EnhancerTestUtils;
@@ -23,6 +25,9 @@ import org.hibernate.test.bytecode.enhancement.join.HHH3949TestTask1;
 import org.hibernate.test.bytecode.enhancement.join.HHH3949TestTask2;
 import org.hibernate.test.bytecode.enhancement.join.HHH3949TestTask3;
 import org.hibernate.test.bytecode.enhancement.join.HHH3949TestTask4;
+import org.hibernate.test.bytecode.enhancement.lazy.HHH_10708.UnexpectedDeleteOneTestTask;
+import org.hibernate.test.bytecode.enhancement.lazy.HHH_10708.UnexpectedDeleteThreeTestTask;
+import org.hibernate.test.bytecode.enhancement.lazy.HHH_10708.UnexpectedDeleteTwoTestTask;
 import org.hibernate.test.bytecode.enhancement.lazy.LazyBasicFieldNotInitializedTestTask;
 import org.hibernate.test.bytecode.enhancement.lazy.LazyCollectionLoadingTestTask;
 import org.hibernate.test.bytecode.enhancement.lazy.LazyLoadingIntegrationTestTask;
@@ -31,6 +36,7 @@ import org.hibernate.test.bytecode.enhancement.lazy.basic.LazyBasicFieldAccessTe
 import org.hibernate.test.bytecode.enhancement.lazy.basic.LazyBasicPropertyAccessTestTask;
 import org.hibernate.test.bytecode.enhancement.lazy.group.LazyGroupAccessTestTask;
 import org.hibernate.test.bytecode.enhancement.lazyCache.InitFromCacheTestTask;
+import org.hibernate.test.bytecode.enhancement.mapped.MappedSuperclassTestTask;
 import org.hibernate.test.bytecode.enhancement.merge.CompositeMergeTestTask;
 import org.hibernate.test.bytecode.enhancement.ondemandload.LazyCollectionWithClearedSessionTestTask;
 import org.hibernate.test.bytecode.enhancement.ondemandload.LazyCollectionWithClosedSessionTestTask;
@@ -55,8 +61,19 @@ public class EnhancerTest extends BaseUnitTestCase {
 	}
 
 	@Test
+	@TestForIssue( jiraKey = "HHH-10851" )
+	public void testAccess() {
+		EnhancerTestUtils.runEnhancerTestTask( MixedAccessTestTask.class );
+	}
+
+	@Test
 	public void testDirty() {
 		EnhancerTestUtils.runEnhancerTestTask( DirtyTrackingTestTask.class );
+	}
+
+	@Test
+	public void testEviction() {
+		EnhancerTestUtils.runEnhancerTestTask( EvictionTestTask.class );
 	}
 
 	@Test
@@ -100,6 +117,20 @@ public class EnhancerTest extends BaseUnitTestCase {
 		EnhancerTestUtils.runEnhancerTestTask( LazyCollectionWithClearedSessionTestTask.class );
 		EnhancerTestUtils.runEnhancerTestTask( LazyCollectionWithClosedSessionTestTask.class );
 		EnhancerTestUtils.runEnhancerTestTask( LazyEntityLoadingWithClosedSessionTestTask.class );
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-10708" )
+	public void testLazyUnexpectedDelete() {
+		EnhancerTestUtils.runEnhancerTestTask( UnexpectedDeleteOneTestTask.class );
+		EnhancerTestUtils.runEnhancerTestTask( UnexpectedDeleteTwoTestTask.class );
+		EnhancerTestUtils.runEnhancerTestTask( UnexpectedDeleteThreeTestTask.class );
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-10646" )
+	public void testMappedSuperclass() {
+		EnhancerTestUtils.runEnhancerTestTask( MappedSuperclassTestTask.class );
 	}
 
 	@Test

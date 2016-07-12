@@ -112,7 +112,7 @@ import org.jboss.logging.Logger;
  * <tr>
  *   <td><tt>hibernate.jdbc.use_getGeneratedKeys</tt></td>
  *   <td>enable use of JDBC3 PreparedStatement.getGeneratedKeys() to retrieve
- *   natively generated keys after insert. Requires JDBC3+ driver and JRE1.4+</td>
+ *   natively generated keys afterQuery insert. Requires JDBC3+ driver and JRE1.4+</td>
  * </tr>
  * <tr>
  *   <td><tt>hibernate.hbm2ddl.auto</tt></td>
@@ -214,14 +214,15 @@ public final class Environment implements AvailableSettings {
 		}
 
 		try {
-		    Properties systemProperties = System.getProperties();
+			Properties systemProperties = System.getProperties();
 		    // Must be thread-safe in case an application changes System properties during Hibernate initialization.
 		    // See HHH-8383.
-		    synchronized (systemProperties) {
-		    	GLOBAL_PROPERTIES.putAll(systemProperties);
-		    }
-		} catch (SecurityException se) {
-		    LOG.unableToCopySystemProperties();
+			synchronized (systemProperties) {
+				GLOBAL_PROPERTIES.putAll(systemProperties);
+			}
+		}
+		catch (SecurityException se) {
+			LOG.unableToCopySystemProperties();
 		}
 
 		verifyProperties(GLOBAL_PROPERTIES);

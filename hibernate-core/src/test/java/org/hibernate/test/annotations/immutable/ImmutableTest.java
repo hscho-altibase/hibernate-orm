@@ -6,7 +6,9 @@
  */
 package org.hibernate.test.annotations.immutable;
 
+import javax.persistence.PersistenceException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.hibernate.AnnotationException;
@@ -102,9 +104,10 @@ public class ImmutableTest extends BaseCoreFunctionalTestCase {
 			tx.commit();
 			fail();
 		}
-		catch (HibernateException e) {
-			assertTrue(e.getMessage().contains("changed an immutable collection instance"));
-            log.debug("success");
+		catch ( PersistenceException ex ) {
+			// expected
+			assertTrue(ex.getMessage().contains("changed an immutable collection instance"));
+			log.debug("success");
 		}
 		s.close();
 
@@ -119,7 +122,7 @@ public class ImmutableTest extends BaseCoreFunctionalTestCase {
 		try {
 			tx.commit();
 			fail();
-		} catch (HibernateException e) {
+		} catch (PersistenceException e) {
 			assertTrue(e.getMessage().contains("changed an immutable collection instance"));
             log.debug("success");
 		}
@@ -133,7 +136,90 @@ public class ImmutableTest extends BaseCoreFunctionalTestCase {
 		tx.commit();
 		s.close();
 	}
+	
+	@Test
+	public void testImmutableAttribute(){
+		configuration().addAttributeConverter( ExifConverter.class);
+		configuration().addAttributeConverter( CaptionConverter.class);
+		Session s = openSession();
+		Transaction tx = s.beginTransaction();
 
+		Photo photo = new Photo();
+		photo.setName( "cat.jpg");
+		photo.setMetadata( new Exif(Collections.singletonMap( "fake", "first value")));
+		photo.setCaption( new Caption( "Cat.jpg caption" ) );
+		s.persist(photo);
+		tx.commit();
+		s.close();
+
+		// try changing the attribute
+		s = openSession();
+		tx = s.beginTransaction();
+
+		Photo cat = s.get(Photo.class, photo.getId());
+		assertNotNull(cat);
+		cat.getMetadata().getAttributes().put( "fake", "second value");
+		cat.getCaption().setText( "new caption" );
+
+		tx.commit();
+		s.close();
+
+		// retrieving the attribute again - it should be unmodified since object identity is the same
+		s = openSession();
+		tx = s.beginTransaction();
+
+		cat = s.get(Photo.class, photo.getId());
+		assertNotNull(cat);
+		assertEquals("Metadata should not have changed", "first value", cat.getMetadata().getAttribute( "fake"));
+		assertEquals("Caption should not have changed", "Cat.jpg caption", cat.getCaption().getText());
+
+		tx.commit();
+		s.close();
+	}
+
+	@Test
+	public void testChangeImmutableAttribute(){
+		configuration().addAttributeConverter( ExifConverter.class);
+		configuration().addAttributeConverter( CaptionConverter.class);
+
+		Session s = openSession();
+		Transaction tx = s.beginTransaction();
+
+		Photo photo = new Photo();
+		photo.setName( "cat.jpg");
+		photo.setMetadata( new Exif(Collections.singletonMap( "fake", "first value")));
+		photo.setCaption( new Caption( "Cat.jpg caption" ) );
+		s.persist(photo);
+
+		tx.commit();
+		s.close();
+
+		// replacing the attribute
+		s = openSession();
+		tx = s.beginTransaction();
+
+		Photo cat = s.get(Photo.class, photo.getId());
+		assertNotNull(cat);
+		cat.setMetadata( new Exif(Collections.singletonMap( "fake", "second value")));
+		cat.setCaption( new Caption( "new caption" ) );
+
+		tx.commit();
+		s.close();
+
+		// retrieving the attribute again - it should be modified since the holder object has changed as well
+		s = openSession();
+		tx = s.beginTransaction();
+
+		cat = s.get(Photo.class, photo.getId());
+		assertNotNull(cat);
+
+		assertEquals("Metadata should have changed", "second value", cat.getMetadata().getAttribute( "fake"));
+		assertEquals("Caption should have changed", "new caption", cat.getCaption().getText());
+
+		tx.commit();
+		s.close();
+	}
+	
 	@Test
 	public void testMisplacedImmutableAnnotation() {
 		try {
@@ -146,6 +232,6 @@ public class ImmutableTest extends BaseCoreFunctionalTestCase {
 
 	@Override
     protected Class[] getAnnotatedClasses() {
-		return new Class[] { Country.class, State.class};
+		return new Class[] { Country.class, State.class, Photo.class };
 	}
 }

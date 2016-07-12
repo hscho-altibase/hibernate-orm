@@ -57,6 +57,8 @@ public class LockOptions implements Serializable {
 
 	private Map<String,LockMode> aliasSpecificLockModes;
 
+	private Boolean followOnLocking;
+
 	/**
 	 * Constructs a LockOptions with all default options.
 	 */
@@ -183,11 +185,20 @@ public class LockOptions implements Serializable {
 	 *
 	 * @return Iterator for accessing the Map.Entry's
 	 */
-	public Iterator getAliasLockIterator() {
+	public Iterator<Map.Entry<String,LockMode>> getAliasLockIterator() {
+		return getAliasSpecificLocks().iterator();
+	}
+
+	/**
+	 * Iterable access to alias (key) and LockMode (value) as Map.Entry.
+	 *
+	 * @return Iterable for accessing the Map.Entry's
+	 */
+	public Iterable<Map.Entry<String,LockMode>> getAliasSpecificLocks() {
 		if ( aliasSpecificLockModes == null ) {
-			return Collections.emptyList().iterator();
+			return Collections.emptyList();
 		}
-		return aliasSpecificLockModes.entrySet().iterator();
+		return aliasSpecificLockModes.entrySet();
 	}
 
 	/**
@@ -270,6 +281,25 @@ public class LockOptions implements Serializable {
 	}
 
 	/**
+	 * Retrieve the current follow-on-locking setting.
+	 *
+	 * @return true if follow-on-locking is enabled
+	 */
+	public Boolean getFollowOnLocking() {
+		return followOnLocking;
+	}
+
+	/**
+	 * Set the the follow-on-locking setting.
+	 * @param followOnLocking The new follow-on-locking setting
+	 * @return this (for method chaining).
+	 */
+	public LockOptions setFollowOnLocking(Boolean followOnLocking) {
+		this.followOnLocking = followOnLocking;
+		return this;
+	}
+
+	/**
 	 * Make a copy.
 	 *
 	 * @return The copy
@@ -295,6 +325,7 @@ public class LockOptions implements Serializable {
 		if ( source.aliasSpecificLockModes != null ) {
 			destination.aliasSpecificLockModes = new HashMap<String,LockMode>( source.aliasSpecificLockModes );
 		}
+		destination.setFollowOnLocking( source.getFollowOnLocking() );
 		return destination;
 	}
 }

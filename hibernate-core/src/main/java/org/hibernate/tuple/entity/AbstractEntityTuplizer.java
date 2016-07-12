@@ -15,11 +15,12 @@ import org.hibernate.EntityMode;
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
 import org.hibernate.bytecode.enhance.spi.LazyPropertyInitializer;
+import org.hibernate.bytecode.spi.BytecodeEnhancementMetadata;
 import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.engine.spi.EntityKey;
 import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.engine.spi.SessionImplementor;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.event.service.spi.EventListenerRegistry;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.EventType;
@@ -202,7 +203,7 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 	}
 
 	@Override
-	public Serializable getIdentifier(Object entity, SessionImplementor session) {
+	public Serializable getIdentifier(Object entity, SharedSessionContractImplementor session) {
 		final Object id;
 		if ( entityMetamodel.getIdentifierProperty().isEmbedded() ) {
 			id = entity;
@@ -247,7 +248,7 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 	}
 
 	@Override
-	public void setIdentifier(Object entity, Serializable id, SessionImplementor session) {
+	public void setIdentifier(Object entity, Serializable id, SharedSessionContractImplementor session) {
 		if ( entityMetamodel.getIdentifierProperty().isEmbedded() ) {
 			if ( entity != id ) {
 				CompositeType copier = (CompositeType) entityMetamodel.getIdentifierProperty().getType();
@@ -263,9 +264,9 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 	}
 
 	private static interface MappedIdentifierValueMarshaller {
-		public Object getIdentifier(Object entity, EntityMode entityMode, SessionImplementor session);
+		public Object getIdentifier(Object entity, EntityMode entityMode, SharedSessionContractImplementor session);
 
-		public void setIdentifier(Object entity, Serializable id, EntityMode entityMode, SessionImplementor session);
+		public void setIdentifier(Object entity, Serializable id, EntityMode entityMode, SharedSessionContractImplementor session);
 	}
 
 	private final MappedIdentifierValueMarshaller mappedIdentifierValueMarshaller;
@@ -314,7 +315,7 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 		}
 
 		@Override
-		public Object getIdentifier(Object entity, EntityMode entityMode, SessionImplementor session) {
+		public Object getIdentifier(Object entity, EntityMode entityMode, SharedSessionContractImplementor session) {
 			Object id = mappedIdentifierType.instantiate( entityMode );
 			final Object[] propertyValues = virtualIdComponent.getPropertyValues( entity, entityMode );
 			mappedIdentifierType.setPropertyValues( id, propertyValues, entityMode );
@@ -322,7 +323,7 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 		}
 
 		@Override
-		public void setIdentifier(Object entity, Serializable id, EntityMode entityMode, SessionImplementor session) {
+		public void setIdentifier(Object entity, Serializable id, EntityMode entityMode, SharedSessionContractImplementor session) {
 			virtualIdComponent.setPropertyValues(
 					entity,
 					mappedIdentifierType.getPropertyValues( id, session ),
@@ -344,7 +345,7 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 		}
 
 		@Override
-		public Object getIdentifier(Object entity, EntityMode entityMode, SessionImplementor session) {
+		public Object getIdentifier(Object entity, EntityMode entityMode, SharedSessionContractImplementor session) {
 			final Object id = mappedIdentifierType.instantiate( entityMode );
 			final Object[] propertyValues = virtualIdComponent.getPropertyValues( entity, entityMode );
 			final Type[] subTypes = virtualIdComponent.getSubtypes();
@@ -400,7 +401,7 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 		}
 
 		@Override
-		public void setIdentifier(Object entity, Serializable id, EntityMode entityMode, SessionImplementor session) {
+		public void setIdentifier(Object entity, Serializable id, EntityMode entityMode, SharedSessionContractImplementor session) {
 			final Object[] extractedValues = mappedIdentifierType.getPropertyValues( id, entityMode );
 			final Object[] injectionValues = new Object[extractedValues.length];
 			final PersistenceContext persistenceContext = session.getPersistenceContext();
@@ -416,7 +417,7 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 					final String associatedEntityName = ( (EntityType) virtualPropertyType ).getAssociatedEntityName();
 					final EntityKey entityKey = session.generateEntityKey(
 							(Serializable) extractedValues[i],
-							session.getFactory().getEntityPersister( associatedEntityName )
+							session.getFactory().getMetamodel().entityPersister( associatedEntityName )
 					);
 					// it is conceivable there is a proxy, so check that first
 					Object association = persistenceContext.getProxy( entityKey );
@@ -434,7 +435,7 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 		}
 	}
 
-	private static Iterable<PersistEventListener> persistEventListeners(SessionImplementor session) {
+	private static Iterable<PersistEventListener> persistEventListeners(SharedSessionContractImplementor session) {
 		return session
 				.getFactory()
 				.getServiceRegistry()
@@ -455,7 +456,7 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 			Object entity,
 			Serializable currentId,
 			Object currentVersion,
-			SessionImplementor session) {
+			SharedSessionContractImplementor session) {
 		//noinspection StatementWithEmptyBody
 		if ( entityMetamodel.getIdentifierProperty().getIdentifierGenerator() instanceof Assigned ) {
 		}
@@ -494,14 +495,14 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 	}
 
 	@Override
-	public Object[] getPropertyValues(Object entity) throws HibernateException {
-		boolean getAll = shouldGetAllProperties( entity );
+	public Object[] getPropertyValues(Object entity) {
+		final BytecodeEnhancementMetadata enhancementMetadata = entityMetamodel.getBytecodeEnhancementMetadata();
 		final int span = entityMetamodel.getPropertySpan();
 		final Object[] result = new Object[span];
 
 		for ( int j = 0; j < span; j++ ) {
 			NonIdentifierAttribute property = entityMetamodel.getProperties()[j];
-			if ( getAll || !property.isLazy() ) {
+			if ( !property.isLazy() || enhancementMetadata.isAttributeLoaded( entity, property.getName() ) ) {
 				result[j] = getters[j].get( entity );
 			}
 			else {
@@ -512,8 +513,7 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 	}
 
 	@Override
-	public Object[] getPropertyValuesToInsert(Object entity, Map mergeMap, SessionImplementor session)
-			throws HibernateException {
+	public Object[] getPropertyValuesToInsert(Object entity, Map mergeMap, SharedSessionContractImplementor session) {
 		final int span = entityMetamodel.getPropertySpan();
 		final Object[] result = new Object[span];
 
@@ -631,7 +631,7 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 	}
 
 	@Override
-	public final Object instantiate(Serializable id, SessionImplementor session) {
+	public final Object instantiate(Serializable id, SharedSessionContractImplementor session) {
 		Object result = getInstantiator().instantiate( id );
 		if ( id != null ) {
 			setIdentifier( result, id, session );
@@ -645,7 +645,7 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 	}
 
 	@Override
-	public void afterInitialize(Object entity, SessionImplementor session) {
+	public void afterInitialize(Object entity, SharedSessionContractImplementor session) {
 	}
 
 	@Override
@@ -659,8 +659,7 @@ public abstract class AbstractEntityTuplizer implements EntityTuplizer {
 	}
 
 	@Override
-	public final Object createProxy(Serializable id, SessionImplementor session)
-			throws HibernateException {
+	public final Object createProxy(Serializable id, SharedSessionContractImplementor session) {
 		return getProxyFactory().getProxy( id, session );
 	}
 

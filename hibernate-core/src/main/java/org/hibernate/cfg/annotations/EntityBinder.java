@@ -80,9 +80,7 @@ import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.StringHelper;
 import org.hibernate.mapping.DependantValue;
 import org.hibernate.mapping.Join;
-import org.hibernate.mapping.MappedSuperclass;
 import org.hibernate.mapping.PersistentClass;
-import org.hibernate.mapping.Property;
 import org.hibernate.mapping.RootClass;
 import org.hibernate.mapping.SimpleValue;
 import org.hibernate.mapping.SingleTableSubclass;
@@ -102,8 +100,8 @@ import static org.hibernate.cfg.BinderHelper.toAliasTableMap;
  * @author Emmanuel Bernard
  */
 public class EntityBinder {
-    private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class, EntityBinder.class.getName());
-    private static final String NATURAL_ID_CACHE_SUFFIX = "##NaturalId";
+	private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class, EntityBinder.class.getName());
+	private static final String NATURAL_ID_CACHE_SUFFIX = "##NaturalId";
 
 	private MetadataBuildingContext context;
 
@@ -163,7 +161,7 @@ public class EntityBinder {
 
 	/**
 	 * For the most part, this is a simple delegation to {@link PersistentClass#isPropertyDefinedInHierarchy},
-	 * after verifying that PersistentClass is indeed set here.
+	 * afterQuery verifying that PersistentClass is indeed set here.
 	 *
 	 * @param name The name of the property to check
 	 *
@@ -298,10 +296,10 @@ public class EntityBinder {
 			}
 		}
 		else {
-            if (explicitHibernateEntityAnnotation) {
+			if (explicitHibernateEntityAnnotation) {
 				LOG.entityAnnotationOnNonRoot(annotatedClass.getName());
 			}
-            if (annotatedClass.isAnnotationPresent(Immutable.class)) {
+			if (annotatedClass.isAnnotationPresent(Immutable.class)) {
 				LOG.immutableAnnotationOnNonRoot(annotatedClass.getName());
 			}
 		}
@@ -699,8 +697,8 @@ public class EntityBinder {
 
 	public void finalSecondaryTableBinding(PropertyHolder propertyHolder) {
 		/*
-		 * Those operations has to be done after the id definition of the persistence class.
-		 * ie after the properties parsing
+		 * Those operations has to be done afterQuery the id definition of the persistence class.
+		 * ie afterQuery the properties parsing
 		 */
 		Iterator joins = secondaryTables.values().iterator();
 		Iterator joinColumns = secondaryTableJoins.values().iterator();
@@ -809,6 +807,7 @@ public class EntityBinder {
 				}
 				else {
 					( (SimpleValue) join.getKey() ).setForeignKeyName( StringHelper.nullIfEmpty( jpaSecondaryTable.foreignKey().name() ) );
+					( (SimpleValue) join.getKey() ).setForeignKeyDefinition( StringHelper.nullIfEmpty( jpaSecondaryTable.foreignKey().foreignKeyDefinition() ) );
 				}
 			}
 		}
@@ -1161,7 +1160,7 @@ public class EntityBinder {
 	public AccessType getPropertyAccessor(XAnnotatedElement element) {
 		AccessType accessType = getExplicitAccessType( element );
 		if ( accessType == null ) {
-		   accessType = propertyAccessType;
+			accessType = propertyAccessType;
 		}
 		return accessType;
 	}

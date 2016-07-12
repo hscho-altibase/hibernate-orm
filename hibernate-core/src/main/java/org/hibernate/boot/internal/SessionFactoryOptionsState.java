@@ -8,7 +8,6 @@ package org.hibernate.boot.internal;
 
 import java.util.Map;
 
-import org.hibernate.ConnectionAcquisitionMode;
 import org.hibernate.ConnectionReleaseMode;
 import org.hibernate.CustomEntityDirtinessStrategy;
 import org.hibernate.EntityMode;
@@ -20,6 +19,7 @@ import org.hibernate.SessionFactoryObserver;
 import org.hibernate.boot.SchemaAutoTooling;
 import org.hibernate.boot.TempTableDdlTransactionHandling;
 import org.hibernate.boot.registry.StandardServiceRegistry;
+import org.hibernate.boot.spi.SessionFactoryOptions;
 import org.hibernate.cache.spi.QueryCacheFactory;
 import org.hibernate.cfg.BaselineSessionEventsListenerBuilder;
 import org.hibernate.context.spi.CurrentTenantIdentifierResolver;
@@ -39,6 +39,17 @@ import org.hibernate.tuple.entity.EntityTuplizerFactory;
 public interface SessionFactoryOptionsState {
 	StandardServiceRegistry getServiceRegistry();
 
+	/**
+	 * @deprecated (since 5.2) see {@link SessionFactoryOptions#isJpaBootstrap} for details
+	 * on deprecation and intention/use.
+	 */
+	@Deprecated
+	boolean isJpaBootstrap();
+
+	boolean isJtaTransactionAccessEnabled();
+
+	boolean isAllowOutOfTransactionUpdateOperations();
+
 	Object getBeanManagerReference();
 
 	Object getValidatorFactoryReference();
@@ -54,6 +65,8 @@ public interface SessionFactoryOptionsState {
 	boolean isStatisticsEnabled();
 
 	Interceptor getInterceptor();
+
+	Class<? extends Interceptor> getStatelessInterceptorImplementor();
 
 	StatementInspector getStatementInspector();
 
@@ -150,5 +163,4 @@ public interface SessionFactoryOptionsState {
 	Map<String, SQLFunction> getCustomSqlFunctionMap();
 
 	boolean isPreferUserTransaction();
-
 }

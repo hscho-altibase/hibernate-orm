@@ -474,7 +474,7 @@ public final class AnnotationBinder {
 	}
 
 	/**
-	 * Bind a class having JSR175 annotations. Subclasses <b>have to</b> be bound after its parent class.
+	 * Bind a class having JSR175 annotations. Subclasses <b>have to</b> be bound afterQuery its parent class.
 	 *
 	 * @param clazzToProcess entity to bind as {@code XClass} instance
 	 * @param inheritanceStatePerClass Meta data about the inheritance relationships for all mapped classes
@@ -582,8 +582,8 @@ public final class AnnotationBinder {
 		entityBinder.setProxy( clazzToProcess.getAnnotation( Proxy.class ) );
 		entityBinder.setBatchSize( clazzToProcess.getAnnotation( BatchSize.class ) );
 		entityBinder.setWhere( clazzToProcess.getAnnotation( Where.class ) );
-	    entityBinder.setCache( determineCacheSettings( clazzToProcess, context ) );
-	    entityBinder.setNaturalIdCache( clazzToProcess, clazzToProcess.getAnnotation( NaturalIdCache.class ) );
+		entityBinder.setCache( determineCacheSettings( clazzToProcess, context ) );
+		entityBinder.setNaturalIdCache( clazzToProcess, clazzToProcess.getAnnotation( NaturalIdCache.class ) );
 
 		bindFilters( clazzToProcess, entityBinder, context );
 
@@ -655,6 +655,13 @@ public final class AnnotationBinder {
 				if ( fk != null && !BinderHelper.isEmptyAnnotationValue( fk.name() ) ) {
 					key.setForeignKeyName( fk.name() );
 				}
+				else {
+					final PrimaryKeyJoinColumn pkJoinColumn = clazzToProcess.getAnnotation( PrimaryKeyJoinColumn.class );
+					if ( pkJoinColumn != null && pkJoinColumn.foreignKey() != null
+							&& !StringHelper.isEmpty( pkJoinColumn.foreignKey().name() ) ) {
+						key.setForeignKeyName( pkJoinColumn.foreignKey().name() );
+					}
+				}
 				if ( onDeleteAnn != null ) {
 					key.setCascadeDeleteEnabled( OnDeleteAction.CASCADE.equals( onDeleteAnn.action() ) );
 				}
@@ -701,7 +708,7 @@ public final class AnnotationBinder {
 			}
 		}
 
-        if ( onDeleteAnn != null && !onDeleteAppropriate ) {
+		if ( onDeleteAnn != null && !onDeleteAppropriate ) {
 			LOG.invalidOnDeleteAnnotation(propertyHolder.getEntityName());
 		}
 
@@ -1263,7 +1270,7 @@ public final class AnnotationBinder {
 			//check if superclass is not a potential persistent class
 			if ( inheritanceState.hasParents() ) {
 				throw new AssertionFailure(
-						"Subclass has to be binded after it's mother class: "
+						"Subclass has to be binded afterQuery it's mother class: "
 								+ superEntityState.getClazz().getName()
 				);
 			}
@@ -1520,7 +1527,7 @@ public final class AnnotationBinder {
 
 		/*
 		 * put element annotated by @Id in front
-		 * since it has to be parsed before any association by Hibernate
+		 * since it has to be parsed beforeQuery any association by Hibernate
 		 */
 		final XAnnotatedElement element = propertyAnnotatedElement.getProperty();
 		if ( element.isAnnotationPresent( Id.class ) || element.isAnnotationPresent( EmbeddedId.class ) ) {
@@ -2271,7 +2278,7 @@ public final class AnnotationBinder {
 			}
 		}
 		//init index
-		//process indexes after everything: in second pass, many to one has to be done before indexes
+		//process indexes afterQuery everything: in second pass, many to one has to be done beforeQuery indexes
 		Index index = property.getAnnotation( Index.class );
 		if ( index != null ) {
 			if ( joinColumns != null ) {
@@ -2900,7 +2907,7 @@ public final class AnnotationBinder {
 						&& ! BinderHelper.isEmptyAnnotationValue( joinColumn.name() )
 						&& joinColumn.name().equals( columnName )
 						&& !property.isAnnotationPresent( MapsId.class ) ) {
-				   hasSpecjManyToOne = true;
+					hasSpecjManyToOne = true;
 					for ( Ejb3JoinColumn column : columns ) {
 						column.setInsertable( false );
 						column.setUpdatable( false );
@@ -2925,6 +2932,7 @@ public final class AnnotationBinder {
 			}
 			else if ( joinColumn != null ) {
 				value.setForeignKeyName( StringHelper.nullIfEmpty( joinColumn.foreignKey().name() ) );
+				value.setForeignKeyDefinition( StringHelper.nullIfEmpty( joinColumn.foreignKey().foreignKeyDefinition() ) );
 			}
 		}
 

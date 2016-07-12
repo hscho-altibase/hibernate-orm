@@ -994,6 +994,8 @@ public class ModelBinder {
 				rootEntityDescriptor.getTable()
 		);
 
+		versionValue.makeVersion();
+
 		bindSimpleValueType(
 				sourceDocument,
 				versionAttributeSource.getTypeInformation(),
@@ -1889,7 +1891,7 @@ public class ModelBinder {
 				sourceDocument,
 				attributeSource.getRelationalValueSources(),
 				value,
-				true,
+				attributeSource.areValuesNullableByDefault(),
 				new RelationalObjectBinder.ColumnNamingDelegate() {
 					@Override
 					public Identifier determineImplicitName(LocalMetadataBuildingContext context) {
@@ -3386,7 +3388,7 @@ public class ModelBinder {
 
 				makeIdentifier(
 						mappingDocument,
-						new IdentifierGeneratorDefinition( idSource.getGeneratorName() ),
+						new IdentifierGeneratorDefinition( idSource.getGeneratorName(), idSource.getParameters() ),
 						null,
 						idBinding
 				);

@@ -6,16 +6,16 @@
  */
 package org.hibernate.cache.infinispan.access;
 
-import org.hibernate.cache.CacheException;
-import org.hibernate.cache.infinispan.impl.BaseRegion;
-import org.hibernate.cache.spi.access.SoftLock;
-import org.hibernate.engine.spi.SessionImplementor;
-import org.hibernate.resource.transaction.TransactionCoordinator;
-import org.hibernate.resource.transaction.spi.TransactionStatus;
-
 import javax.transaction.Status;
 import javax.transaction.SystemException;
 import javax.transaction.TransactionManager;
+
+import org.hibernate.cache.CacheException;
+import org.hibernate.cache.infinispan.impl.BaseRegion;
+import org.hibernate.cache.spi.access.SoftLock;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.resource.transaction.spi.TransactionCoordinator;
+import org.hibernate.resource.transaction.spi.TransactionStatus;
 
 /**
  * Delegate for non-transactional caches
@@ -29,13 +29,13 @@ public class NonTxInvalidationCacheAccessDelegate extends InvalidationCacheAcces
 
 	@Override
 	@SuppressWarnings("UnusedParameters")
-	public boolean insert(SessionImplementor session, Object key, Object value, Object version) throws CacheException {
+	public boolean insert(SharedSessionContractImplementor session, Object key, Object value, Object version) throws CacheException {
 		if ( !region.checkValid() ) {
 			return false;
 		}
 
 		// We need to be invalidating even for regular writes; if we were not and the write was followed by eviction
-		// (or any other invalidation), naked put that was started after the eviction ended but before this insert
+		// (or any other invalidation), naked put that was started afterQuery the eviction ended but beforeQuery this insert
 		// ended could insert the stale entry into the cache (since the entry was removed by eviction).
 		if ( !putValidator.beginInvalidatingWithPFER(session, key, value)) {
 			throw log.failedInvalidatePendingPut(key, region.getName());
@@ -52,14 +52,14 @@ public class NonTxInvalidationCacheAccessDelegate extends InvalidationCacheAcces
 
 	@Override
 	@SuppressWarnings("UnusedParameters")
-	public boolean update(SessionImplementor session, Object key, Object value, Object currentVersion, Object previousVersion)
+	public boolean update(SharedSessionContractImplementor session, Object key, Object value, Object currentVersion, Object previousVersion)
 			throws CacheException {
 		// We update whether or not the region is valid. Other nodes
 		// may have already restored the region so they need to
 		// be informed of the change.
 
 		// We need to be invalidating even for regular writes; if we were not and the write was followed by eviction
-		// (or any other invalidation), naked put that was started after the eviction ended but before this update
+		// (or any other invalidation), naked put that was started afterQuery the eviction ended but beforeQuery this update
 		// ended could insert the stale entry into the cache (since the entry was removed by eviction).
 		if ( !putValidator.beginInvalidatingWithPFER(session, key, value)) {
 			throw log.failedInvalidatePendingPut(key, region.getName());
@@ -74,9 +74,9 @@ public class NonTxInvalidationCacheAccessDelegate extends InvalidationCacheAcces
 		return true;
 	}
 
-	protected boolean isCommitted(SessionImplementor session) {
+	protected boolean isCommitted(SharedSessionContractImplementor session) {
 		if (session.isClosed()) {
-			// If the session has been closed before transaction ends, so we cannot find out
+			// If the session has been closed beforeQuery transaction ends, so we cannot find out
 			// if the transaction was successful and if we can do the PFER.
 			// As this can happen only in JTA environment, we can query the TransactionManager
 			// directly here.
@@ -102,14 +102,14 @@ public class NonTxInvalidationCacheAccessDelegate extends InvalidationCacheAcces
 	}
 
 	@Override
-	public void unlockItem(SessionImplementor session, Object key) throws CacheException {
+	public void unlockItem(SharedSessionContractImplementor session, Object key) throws CacheException {
 		if ( !putValidator.endInvalidatingKey(session, key, isCommitted(session)) ) {
 			log.failedEndInvalidating(key, region.getName());
 		}
 	}
 
 	@Override
-	public boolean afterInsert(SessionImplementor session, Object key, Object value, Object version) {
+	public boolean afterInsert(SharedSessionContractImplementor session, Object key, Object value, Object version) {
 		if ( !putValidator.endInvalidatingKey(session, key, isCommitted(session)) ) {
 			log.failedEndInvalidating(key, region.getName());
 		}
@@ -117,7 +117,7 @@ public class NonTxInvalidationCacheAccessDelegate extends InvalidationCacheAcces
 	}
 
 	@Override
-	public boolean afterUpdate(SessionImplementor session, Object key, Object value, Object currentVersion, Object previousVersion, SoftLock lock) {
+	public boolean afterUpdate(SharedSessionContractImplementor session, Object key, Object value, Object currentVersion, Object previousVersion, SoftLock lock) {
 		if ( !putValidator.endInvalidatingKey(session, key, isCommitted(session)) ) {
 			log.failedEndInvalidating(key, region.getName());
 		}

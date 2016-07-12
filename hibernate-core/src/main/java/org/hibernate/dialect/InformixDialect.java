@@ -6,6 +6,12 @@
  */
 package org.hibernate.dialect;
 
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Locale;
+
+import org.hibernate.dialect.function.NvlFunction;
+import org.hibernate.dialect.function.SQLFunctionTemplate;
 import org.hibernate.dialect.function.VarArgsSQLFunction;
 import org.hibernate.dialect.identity.IdentityColumnSupport;
 import org.hibernate.dialect.identity.InformixIdentityColumnSupport;
@@ -22,10 +28,6 @@ import org.hibernate.hql.spi.id.local.LocalTemporaryTableBulkIdStrategy;
 import org.hibernate.internal.util.JdbcExceptionHelper;
 import org.hibernate.internal.util.StringHelper;
 import org.hibernate.type.StandardBasicTypes;
-
-import java.sql.SQLException;
-import java.sql.Types;
-import java.util.Locale;
 
 /**
  * Informix dialect.<br>
@@ -72,7 +74,11 @@ public class InformixDialect extends Dialect {
 		registerColumnType( Types.VARCHAR, 32739, "lvarchar($l)" );
 
 		registerFunction( "concat", new VarArgsSQLFunction( StandardBasicTypes.STRING, "(", "||", ")" ) );
-		
+		registerFunction( "substring", new SQLFunctionTemplate(StandardBasicTypes.STRING, "substring(?1 FROM ?2 FOR ?3)"));
+		registerFunction( "substr", new SQLFunctionTemplate( StandardBasicTypes.STRING, "substr(?1, ?2, ?3)"));
+		registerFunction( "coalesce", new NvlFunction());
+		registerFunction( "nvl", new NvlFunction());
+
 		uniqueDelegate = new InformixUniqueDelegate( this );
 	}
 
@@ -109,6 +115,17 @@ public class InformixDialect extends Dialect {
 		result.append( " constraint " ).append( constraintName );
 
 		return result.toString();
+	}
+
+	public String getAddForeignKeyConstraintString(
+			String constraintName,
+			String foreignKeyDefinition) {
+		return new StringBuilder( 30 )
+				.append( " add constraint " )
+				.append( foreignKeyDefinition )
+				.append( " constraint " )
+				.append( constraintName )
+				.toString();
 	}
 
 	/**
@@ -276,5 +293,10 @@ public class InformixDialect extends Dialect {
 	@Override
 	public IdentityColumnSupport getIdentityColumnSupport() {
 		return new InformixIdentityColumnSupport();
+	}
+
+	@Override
+	public String toBooleanValueString(boolean bool) {
+		return bool ? "'t'" : "'f'";
 	}
 }

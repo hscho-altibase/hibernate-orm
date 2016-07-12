@@ -424,7 +424,8 @@ Should we prefer using the `org.hibernate.engine.transaction.jta.platform.spi.Jt
 |`hibernate.transaction.auto_close_session` |`true` or `false` (default value) |Causes the session to be closed during the after completion phase of the transaction. If possible, use built-in and automatic session context management instead.
 |`hibernate.transaction.coordinator_class` | a|
 
-Names the implementation of `org.hibernate.resource.transaction.TransactionCoordinatorBuilder` to use for creating `org.hibernate.resource.transaction.TransactionCoordinator` instances.
+Names the implementation of `org.hibernate.resource.transaction.spi.TransactionCoordinatorBuilder` to use for creating
+`org.hibernate.resource.transaction.spi.TransactionCoordinator` instances.
 
 Can be
 
@@ -555,7 +556,7 @@ Hibernate historically also accepted `hibernate.hbm2ddl.import_files` for a simi
 Comma-separated names of the optional files containing SQL DML statements executed during the `SessionFactory` creation.
 File order matters, the statements of a give file are executed before the statements of the following one.
 
-These statements are only executed if the schema is created, meaning that `hibernate.hbm2ddl.auto` is set to `create` or `create-drop`.
+These statements are only executed if the schema is created, meaning that `hibernate.hbm2ddl.auto` is set to `create`, `create-drop`, or `update`.
 `javax.persistence.schema-generation.create-script-source` / `javax.persistence.schema-generation.drop-script-source` should be preferred.
 
 |`javax.persistence.sql-load-script-source` | |
@@ -709,14 +710,35 @@ Otherwise, the persistence context will stay alive till the transaction completi
 
 |`hibernate.ejb.metamodel.population`| `enabled` or `disabled`, or `ignoreUnsupported` (default value) a|
 
+Setting that indicates whether to build the JPA types.
+
+Accepts three values:
+
+enabled:: Do the build
+disabled:: Do not do the build
+ignoreUnsupported:: Do the build, but ignore any non-JPA features that would otherwise result in a failure (e.g. `@Any` annotation).
+
+|`hibernate.jpa.static_metamodel.population` | `enabled` or `disabled`, or `skipUnsupported` (default value) a|
+
 Setting that controls whether we seek out JPA _static metamodel_ classes and populate them.
 
 Accepts three values:
 
 enabled:: Do the population
 disabled:: Do not do the population
-ignoreUnsupported:: Do the population, but ignore any non-JPA features that would otherwise result in the population failing (e.g. `@Any` annotation).
+skipUnsupported:: Do the population, but ignore any non-JPA features that would otherwise result in the population failing (e.g. `@Any` annotation).
+
 
 |`hibernate.delay_cdi_access`| `true` or `false` (default value) | Defines delayed access to CDI `BeanManager`. Starting in 5.1 the preferred means for CDI bootstrapping is through `org.hibernate.jpa.event.spi.jpa.ExtendedBeanManager`.
+
+|`hibernate.allow_update_outside_transaction` | `true` or `false` (default value) a|
+
+Setting that allows to perform update operations outside of a transaction boundary.
+
+Accepts two values:
+
+true:: allows to flush an update out of a transaction
+false:: does not allow
+
 |=====================================================================================================================================================================================================================================================
 

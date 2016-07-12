@@ -8,7 +8,7 @@ package org.hibernate.cache.internal;
 
 import org.hibernate.cache.spi.CacheKeysFactory;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.engine.spi.SessionImplementor;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.persister.collection.CollectionPersister;
 import org.hibernate.persister.entity.EntityPersister;
 
@@ -48,7 +48,7 @@ public class DefaultCacheKeysFactory {
 		return new OldCacheKeyImplementation( id, persister.getIdentifierType(), persister.getRootEntityName(), tenantIdentifier, factory );
 	}
 
-	public static Object createNaturalIdKey(Object[] naturalIdValues, EntityPersister persister, SessionImplementor session) {
+	public static Object createNaturalIdKey(Object[] naturalIdValues, EntityPersister persister, SharedSessionContractImplementor session) {
 		return new OldNaturalIdCacheKey( naturalIdValues,  persister.getPropertyTypes(), persister.getNaturalIdentifierProperties(), persister.getRootEntityName(), session );
 	}
 
@@ -76,7 +76,7 @@ public class DefaultCacheKeysFactory {
 		}
 
 		@Override
-		public Object createNaturalIdKey(Object[] naturalIdValues, EntityPersister persister, SessionImplementor session) {
+		public Object createNaturalIdKey(Object[] naturalIdValues, EntityPersister persister, SharedSessionContractImplementor session) {
 			return DefaultCacheKeysFactory.createNaturalIdKey(naturalIdValues, persister, session);
 		}
 

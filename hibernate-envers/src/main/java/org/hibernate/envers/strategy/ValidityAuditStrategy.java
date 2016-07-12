@@ -20,7 +20,6 @@ import org.hibernate.action.spi.BeforeTransactionCompletionProcess;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.envers.RevisionType;
-import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.configuration.internal.AuditEntitiesConfiguration;
 import org.hibernate.envers.configuration.internal.GlobalConfiguration;
 import org.hibernate.envers.internal.entities.mapper.PersistentCollectionChangeData;
@@ -64,12 +63,13 @@ import static org.hibernate.envers.internal.entities.mapper.relation.query.Query
  * @author Stephanie Pau
  * @author Adam Warski (adam at warski dot org)
  * @author Lukasz Antoniak (lukasz dot antoniak at gmail dot com)
+ * @author Chris Cranford
  */
 public class ValidityAuditStrategy implements AuditStrategy {
 	/**
 	 * getter for the revision entity field annotated with @RevisionTimestamp
 	 */
-	private Getter revisionTimestampGetter = null;
+	private Getter revisionTimestampGetter;
 
 	private final SessionCacheCleaner sessionCacheCleaner;
 
@@ -81,13 +81,12 @@ public class ValidityAuditStrategy implements AuditStrategy {
 	public void perform(
 			final Session session,
 			final String entityName,
-			final EnversService enversService,
+			final AuditEntitiesConfiguration audEntitiesCfg,
 			final Serializable id,
 			final Object data,
 			final Object revision) {
-		final AuditEntitiesConfiguration audEntitiesCfg = enversService.getAuditEntitiesConfiguration();
 		final String auditedEntityName = audEntitiesCfg.getAuditEntityName( entityName );
-		final String revisionInfoEntityName = enversService.getAuditEntitiesConfiguration().getRevisionInfoEntityName();
+		final String revisionInfoEntityName = audEntitiesCfg.getRevisionInfoEntityName();
 
 		// Save the audit data
 		session.save( auditedEntityName, data );
@@ -99,9 +98,9 @@ public class ValidityAuditStrategy implements AuditStrategy {
 		// inserted for the first time. But in case a deleted primary key value was
 		// reused, this guarantees correct strategy behavior: exactly one row with
 		// null end date exists for each identifier.
-		final boolean reuseEntityIdentifier = enversService.getGlobalConfiguration().isAllowIdentifierReuse();
-		if ( reuseEntityIdentifier || getRevisionType( enversService, data ) != RevisionType.ADD ) {
-			// Register transaction completion process to guarantee execution of UPDATE statement after INSERT.
+		final boolean reuseEntityIdentifier = audEntitiesCfg.getEnversService().getGlobalConfiguration().isAllowIdentifierReuse();
+		if ( reuseEntityIdentifier || getRevisionType( audEntitiesCfg, data ) != RevisionType.ADD ) {
+			// Register transaction completion process to guarantee execution of UPDATE statement afterQuery INSERT.
 			( (EventSource) session ).getActionQueue().registerProcess( new BeforeTransactionCompletionProcess() {
 				@Override
 				public void doBeforeTransactionCompletion(final SessionImplementor sessionImplementor) {
@@ -128,19 +127,19 @@ public class ValidityAuditStrategy implements AuditStrategy {
 						updateTableName = rootAuditedEntityQueryable.getTableName();
 					}
 
-					final Type revisionInfoIdType = sessionImplementor.getFactory().getEntityPersister( revisionInfoEntityName ).getIdentifierType();
-					final String revEndColumnName = rootAuditedEntityQueryable.toColumns( enversService.getAuditEntitiesConfiguration().getRevisionEndFieldName() )[0];
+					final Type revisionInfoIdType = sessionImplementor.getFactory().getMetamodel().entityPersister( revisionInfoEntityName ).getIdentifierType();
+					final String revEndColumnName = rootAuditedEntityQueryable.toColumns( audEntitiesCfg.getRevisionEndFieldName() )[0];
 
-					final boolean isRevisionEndTimestampEnabled = enversService.getAuditEntitiesConfiguration().isRevisionEndTimestampEnabled();
+					final boolean isRevisionEndTimestampEnabled = audEntitiesCfg.isRevisionEndTimestampEnabled();
 
 					// update audit_ent set REVEND = ? [, REVEND_TSTMP = ?] where (prod_ent_id) = ? and REV <> ? and REVEND is null
-					final Update update = new Update( sessionImplementor.getFactory().getDialect() ).setTableName( updateTableName );
+					final Update update = new Update( sessionImplementor.getFactory().getJdbcServices().getDialect() ).setTableName( updateTableName );
 					// set REVEND = ?
 					update.addColumn( revEndColumnName );
 					// set [, REVEND_TSTMP = ?]
 					if ( isRevisionEndTimestampEnabled ) {
 						update.addColumn(
-								rootAuditedEntityQueryable.toColumns( enversService.getAuditEntitiesConfiguration().getRevisionEndTimestampFieldName() )[0]
+								rootAuditedEntityQueryable.toColumns( audEntitiesCfg.getRevisionEndTimestampFieldName() )[0]
 						);
 					}
 
@@ -148,7 +147,7 @@ public class ValidityAuditStrategy implements AuditStrategy {
 					update.addPrimaryKeyColumns( rootProductionEntityQueryable.getIdentifierColumnNames() );
 					// where REV <> ?
 					update.addWhereColumn(
-							rootAuditedEntityQueryable.toColumns( enversService.getAuditEntitiesConfiguration().getRevisionNumberPath() )[0], "<> ?"
+							rootAuditedEntityQueryable.toColumns( audEntitiesCfg.getRevisionNumberPath() )[0], "<> ?"
 					);
 					// where REVEND is null
 					update.addWhereColumn( revEndColumnName, " is null" );
@@ -156,7 +155,7 @@ public class ValidityAuditStrategy implements AuditStrategy {
 					// Now lets execute the sql...
 					final String updateSql = update.toStatementString();
 
-					int rowCount = ( (Session) sessionImplementor ).doReturningWork(
+					int rowCount = sessionImplementor.doReturningWork(
 							new ReturningWork<Integer>() {
 								@Override
 								public Integer execute(Connection connection) throws SQLException {
@@ -167,9 +166,10 @@ public class ValidityAuditStrategy implements AuditStrategy {
 										int index = 1;
 
 										// set REVEND = ?
-										final Number revisionNumber = enversService.getRevisionInfoNumberReader().getRevisionNumber(
-												revision
-										);
+										final Number revisionNumber = audEntitiesCfg.getEnversService()
+												.getRevisionInfoNumberReader()
+												.getRevisionNumber( revision );
+
 										revisionInfoIdType.nullSafeSet(
 												preparedStatement, revisionNumber, index, sessionImplementor
 										);
@@ -180,7 +180,7 @@ public class ValidityAuditStrategy implements AuditStrategy {
 											final Object revEndTimestampObj = revisionTimestampGetter.get( revision );
 											final Date revisionEndTimestamp = convertRevEndTimestampToDate( revEndTimestampObj );
 											final Type revEndTsType = rootAuditedEntityQueryable.getPropertyType(
-													enversService.getAuditEntitiesConfiguration().getRevisionEndTimestampFieldName()
+													audEntitiesCfg.getRevisionEndTimestampFieldName()
 											);
 											revEndTsType.nullSafeSet(
 													preparedStatement, revisionEndTimestamp, index, sessionImplementor
@@ -195,7 +195,7 @@ public class ValidityAuditStrategy implements AuditStrategy {
 
 										// where REV <> ?
 										final Type revType = rootAuditedEntityQueryable.getPropertyType(
-												enversService.getAuditEntitiesConfiguration().getRevisionNumberPath()
+												audEntitiesCfg.getRevisionNumberPath()
 										);
 										revType.nullSafeSet( preparedStatement, revisionNumber, index, sessionImplementor );
 
@@ -206,7 +206,7 @@ public class ValidityAuditStrategy implements AuditStrategy {
 												.getJdbcCoordinator().getResultSetReturn().executeUpdate( preparedStatement );
 									}
 									finally {
-										sessionImplementor.getJdbcCoordinator().getResourceRegistry().release(
+										sessionImplementor.getJdbcCoordinator().getLogicalConnection().getResourceRegistry().release(
 												preparedStatement
 										);
 										sessionImplementor.getJdbcCoordinator().afterStatementExecution();
@@ -215,19 +215,19 @@ public class ValidityAuditStrategy implements AuditStrategy {
 							}
 					);
 
-					if ( rowCount != 1 && ( !reuseEntityIdentifier || ( getRevisionType( enversService, data ) != RevisionType.ADD ) ) ) {
+					if ( rowCount != 1 && ( !reuseEntityIdentifier || ( getRevisionType( audEntitiesCfg, data ) != RevisionType.ADD ) ) ) {
 						throw new RuntimeException(
 								"Cannot update previous revision for entity " + auditedEntityName + " and id " + id
 						);
 					}
 				}
-			});
+			} );
 		}
 		sessionCacheCleaner.scheduleAuditDataRemoval( session, data );
 	}
 
 	private Queryable getQueryable(String entityName, SessionImplementor sessionImplementor) {
-		return (Queryable) sessionImplementor.getFactory().getEntityPersister( entityName );
+		return (Queryable) sessionImplementor.getFactory().getMetamodel().entityPersister( entityName );
 	}
 
 	@Override
@@ -236,16 +236,16 @@ public class ValidityAuditStrategy implements AuditStrategy {
 			Session session,
 			String entityName,
 			String propertyName,
-			EnversService enversService,
+			AuditEntitiesConfiguration auditEntitiesConfiguration,
 			PersistentCollectionChangeData persistentCollectionChangeData, Object revision) {
 		final QueryBuilder qb = new QueryBuilder( persistentCollectionChangeData.getEntityName(), MIDDLE_ENTITY_ALIAS );
 
-		final String originalIdPropName = enversService.getAuditEntitiesConfiguration().getOriginalIdPropName();
+		final String originalIdPropName = auditEntitiesConfiguration.getOriginalIdPropName();
 		final Map<String, Object> originalId = (Map<String, Object>) persistentCollectionChangeData.getData().get(
 				originalIdPropName
 		);
-		final String revisionFieldName = enversService.getAuditEntitiesConfiguration().getRevisionFieldName();
-		final String revisionTypePropName = enversService.getAuditEntitiesConfiguration().getRevisionTypePropName();
+		final String revisionFieldName = auditEntitiesConfiguration.getRevisionFieldName();
+		final String revisionTypePropName = auditEntitiesConfiguration.getRevisionTypePropName();
 
 		// Adding a parameter for each id component, except the rev number and type.
 		for ( Map.Entry<String, Object> originalIdEntry : originalId.entrySet() ) {
@@ -257,8 +257,8 @@ public class ValidityAuditStrategy implements AuditStrategy {
 			}
 		}
 
-		final SessionFactoryImplementor sessionFactory = ((SessionImplementor) session).getFactory();
-		final Type propertyType = sessionFactory.getEntityPersister( entityName ).getPropertyType( propertyName );
+		final SessionFactoryImplementor sessionFactory = ( (SessionImplementor) session ).getFactory();
+		final Type propertyType = sessionFactory.getMetamodel().entityPersister( entityName ).getPropertyType( propertyName );
 		if ( propertyType.isCollectionType() ) {
 			CollectionType collectionPropertyType = (CollectionType) propertyType;
 			// Handling collection of components.
@@ -272,7 +272,7 @@ public class ValidityAuditStrategy implements AuditStrategy {
 			}
 		}
 
-		addEndRevisionNullRestriction( enversService, qb.getRootParameters() );
+		addEndRevisionNullRestriction( auditEntitiesConfiguration, qb.getRootParameters() );
 
 		final List<Object> l = qb.toQuery( session ).setLockOptions( LockOptions.UPGRADE ).list();
 
@@ -281,7 +281,7 @@ public class ValidityAuditStrategy implements AuditStrategy {
 		// ADD, we may need to update the last revision.
 		if ( l.size() > 0 ) {
 			updateLastRevision(
-					session, enversService, l, originalId, persistentCollectionChangeData.getEntityName(), revision
+					session, auditEntitiesConfiguration, l, originalId, persistentCollectionChangeData.getEntityName(), revision
 			);
 		}
 
@@ -290,8 +290,8 @@ public class ValidityAuditStrategy implements AuditStrategy {
 		sessionCacheCleaner.scheduleAuditDataRemoval( session, persistentCollectionChangeData.getData() );
 	}
 
-	private void addEndRevisionNullRestriction(EnversService enversService, Parameters rootParameters) {
-		rootParameters.addWhere( enversService.getAuditEntitiesConfiguration().getRevisionEndFieldName(), true, "is", "null", false );
+	private void addEndRevisionNullRestriction(AuditEntitiesConfiguration auditEntitiesConfiguration, Parameters rootParameters) {
+		rootParameters.addWhere( auditEntitiesConfiguration.getRevisionEndFieldName(), true, "is", "null", false );
 	}
 
 	public void addEntityAtRevisionRestriction(
@@ -327,14 +327,14 @@ public class ValidityAuditStrategy implements AuditStrategy {
 	}
 
 	@SuppressWarnings({"unchecked"})
-	private RevisionType getRevisionType(EnversService enversService, Object data) {
-		return (RevisionType) ((Map<String, Object>) data).get( enversService.getAuditEntitiesConfiguration().getRevisionTypePropName() );
+	private RevisionType getRevisionType(AuditEntitiesConfiguration auditEntitiesConfiguration, Object data) {
+		return (RevisionType) ( (Map<String, Object>) data ).get( auditEntitiesConfiguration.getRevisionTypePropName() );
 	}
 
 	@SuppressWarnings({"unchecked"})
 	private void updateLastRevision(
 			Session session,
-			EnversService enversService,
+			AuditEntitiesConfiguration auditEntitiesConfiguration,
 			List<Object> l,
 			Object id,
 			String auditedEntityName,
@@ -343,17 +343,17 @@ public class ValidityAuditStrategy implements AuditStrategy {
 		if ( l.size() == 1 ) {
 			// Setting the end revision to be the current rev
 			Object previousData = l.get( 0 );
-			String revisionEndFieldName = enversService.getAuditEntitiesConfiguration().getRevisionEndFieldName();
-			((Map<String, Object>) previousData).put( revisionEndFieldName, revision );
+			String revisionEndFieldName = auditEntitiesConfiguration.getRevisionEndFieldName();
+			( (Map<String, Object>) previousData ).put( revisionEndFieldName, revision );
 
-			if ( enversService.getAuditEntitiesConfiguration().isRevisionEndTimestampEnabled() ) {
+			if ( auditEntitiesConfiguration.isRevisionEndTimestampEnabled() ) {
 				// Determine the value of the revision property annotated with @RevisionTimestamp
-				String revEndTimestampFieldName = enversService.getAuditEntitiesConfiguration().getRevisionEndTimestampFieldName();
+				String revEndTimestampFieldName = auditEntitiesConfiguration.getRevisionEndTimestampFieldName();
 				Object revEndTimestampObj = this.revisionTimestampGetter.get( revision );
 				Date revisionEndTimestamp = convertRevEndTimestampToDate( revEndTimestampObj );
 
 				// Setting the end revision timestamp
-				((Map<String, Object>) previousData).put( revEndTimestampFieldName, revisionEndTimestamp );
+				( (Map<String, Object>) previousData ).put( revEndTimestampFieldName, revisionEndTimestamp );
 			}
 
 			// Saving the previous version

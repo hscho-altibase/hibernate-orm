@@ -22,7 +22,7 @@ import org.hibernate.engine.internal.CascadePoint;
 import org.hibernate.engine.spi.CascadingActions;
 import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.engine.spi.EntityKey;
-import org.hibernate.engine.spi.SessionImplementor;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.RefreshEvent;
 import org.hibernate.event.spi.RefreshEventListener;
@@ -157,7 +157,7 @@ public class DefaultRefreshEventListener implements RefreshEventListener {
 			final SoftLock lock = cache.lockItem( source, ck, previousVersion );
 			source.getActionQueue().registerProcess( new AfterTransactionCompletionProcess() {
 				@Override
-				public void doAfterTransactionCompletion(boolean success, SessionImplementor session) {
+				public void doAfterTransactionCompletion(boolean success, SharedSessionContractImplementor session) {
 					cache.unlockItem( session, ck, lock );
 				}
 			} );
@@ -169,7 +169,7 @@ public class DefaultRefreshEventListener implements RefreshEventListener {
 		String previousFetchProfile = source.getLoadQueryInfluencers().getInternalFetchProfile();
 		source.getLoadQueryInfluencers().setInternalFetchProfile( "refresh" );
 		Object result = persister.load( id, object, event.getLockOptions(), source );
-		// Keep the same read-only/modifiable setting for the entity that it had before refreshing;
+		// Keep the same read-only/modifiable setting for the entity that it had beforeQuery refreshing;
 		// If it was transient, then set it to the default for the source.
 		if ( result != null ) {
 			if ( !persister.isMutable() ) {
@@ -194,7 +194,7 @@ public class DefaultRefreshEventListener implements RefreshEventListener {
 			throws HibernateException {
 		for ( Type type : types ) {
 			if ( type.isCollectionType() ) {
-				CollectionPersister collectionPersister = source.getFactory().getCollectionPersister( ( (CollectionType) type ).getRole() );
+				CollectionPersister collectionPersister = source.getFactory().getMetamodel().collectionPersister( ( (CollectionType) type ).getRole() );
 				if ( collectionPersister.hasCache() ) {
 					final CollectionRegionAccessStrategy cache = collectionPersister.getCacheAccessStrategy();
 					final Object ck = cache.generateCacheKey(
@@ -206,7 +206,7 @@ public class DefaultRefreshEventListener implements RefreshEventListener {
 					final SoftLock lock = cache.lockItem( source, ck, null );
 					source.getActionQueue().registerProcess( new AfterTransactionCompletionProcess() {
 						@Override
-						public void doAfterTransactionCompletion(boolean success, SessionImplementor session) {
+						public void doAfterTransactionCompletion(boolean success, SharedSessionContractImplementor session) {
 							cache.unlockItem( session, ck, lock );
 						}
 					} );

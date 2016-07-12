@@ -163,14 +163,15 @@ public class ParameterParser {
 					// colon character has been escaped
 					recognizer.other( c );
 					indx++;
-				} else if ( c == ':' ) {
+				}
+				else if ( c == ':' ) {
 					// named parameter
 					final int right = StringHelper.firstIndexOfChar( sqlString, ParserHelper.HQL_SEPARATORS_BITSET, indx + 1 );
 					final int chopLocation = right < 0 ? sqlString.length() : right;
 					final String param = sqlString.substring( indx + 1, chopLocation );
 					if ( StringHelper.isEmpty( param ) ) {
 						throw new QueryException(
-								"Space is not allowed after parameter prefix ':' [" + sqlString + "]"
+								"Space is not allowed afterQuery parameter prefix ':' [" + sqlString + "]"
 						);
 					}
 					recognizer.namedParameter( param, indx );

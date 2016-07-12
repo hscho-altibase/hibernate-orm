@@ -37,6 +37,8 @@ import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.ReflectHelper;
 import org.hibernate.service.ServiceRegistry;
+import org.hibernate.type.BinaryType;
+import org.hibernate.type.RowVersionType;
 import org.hibernate.type.Type;
 import org.hibernate.type.descriptor.JdbcTypeNameMapper;
 import org.hibernate.type.descriptor.converter.AttributeConverterSqlTypeDescriptorAdapter;
@@ -65,6 +67,7 @@ public class SimpleValue implements KeyValue {
 
 	private String typeName;
 	private Properties typeParameters;
+	private boolean isVersion;
 	private boolean isNationalized;
 	private boolean isLob;
 
@@ -73,6 +76,7 @@ public class SimpleValue implements KeyValue {
 	private String nullValue;
 	private Table table;
 	private String foreignKeyName;
+	private String foreignKeyDefinition;
 	private boolean alternateUniqueKey;
 	private boolean cascadeDeleteEnabled;
 
@@ -167,6 +171,13 @@ public class SimpleValue implements KeyValue {
 		this.typeName = typeName;
 	}
 
+	public void makeVersion() {
+		this.isVersion = true;
+	}
+
+	public boolean isVersion() {
+		return isVersion;
+	}
 	public void makeNationalized() {
 		this.isNationalized = true;
 	}
@@ -193,7 +204,7 @@ public class SimpleValue implements KeyValue {
 	@Override
 	public void createForeignKeyOfEntity(String entityName) {
 		if ( !hasFormula() && !"none".equals(getForeignKeyName())) {
-			ForeignKey fk = table.createForeignKey( getForeignKeyName(), getConstraintColumns(), entityName );
+			ForeignKey fk = table.createForeignKey( getForeignKeyName(), getConstraintColumns(), entityName, getForeignKeyDefinition() );
 			fk.setCascadeDeleteEnabled(cascadeDeleteEnabled);
 		}
 	}
@@ -347,6 +358,14 @@ public class SimpleValue implements KeyValue {
 	public void setForeignKeyName(String foreignKeyName) {
 		this.foreignKeyName = foreignKeyName;
 	}
+	
+	public String getForeignKeyDefinition() {
+		return foreignKeyDefinition;
+	}
+
+	public void setForeignKeyDefinition(String foreignKeyDefinition) {
+		this.foreignKeyDefinition = foreignKeyDefinition;
+	}
 
 	public boolean isAlternateUniqueKey() {
 		return alternateUniqueKey;
@@ -399,6 +418,12 @@ public class SimpleValue implements KeyValue {
 		}
 
 		Type result = metadata.getTypeResolver().heuristicType( typeName, typeParameters );
+		// if this is a byte[] version/timestamp, then we need to use RowVersionType
+		// instead of BinaryType (HHH-10413)
+		if ( isVersion && BinaryType.class.isInstance( result ) ) {
+			log.debug( "version is BinaryType; changing to RowVersionType" );
+			result = RowVersionType.INSTANCE;
+		}
 		if ( result == null ) {
 			String msg = "Could not determine type for: " + typeName;
 			if ( table != null ) {

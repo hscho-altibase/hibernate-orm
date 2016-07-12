@@ -428,7 +428,7 @@ selectExpr
 	| functionCall
 	| count
 	| collectionFunction			// elements() or indices()
-	| literal
+	| constant
 	| arithmeticExpr
 	| logicalExpr
 	| parameter
@@ -689,7 +689,7 @@ functionCall
 constant
 	: literal
 	| NULL
-	| TRUE { processBoolean(#constant); } 
+	| TRUE { processBoolean(#constant); }
 	| FALSE { processBoolean(#constant); }
 	| JAVA_CONSTANT
 	;

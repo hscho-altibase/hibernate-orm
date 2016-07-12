@@ -27,7 +27,6 @@ import org.hibernate.dialect.SybaseDialect;
 import org.hibernate.tuple.ValueGenerator;
 
 import org.hibernate.testing.SkipForDialect;
-import org.hibernate.testing.SkipForDialects;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
@@ -44,10 +43,8 @@ import static org.junit.Assert.assertTrue;
  * @author Steve Ebersole
  * @author Gunnar Morling
  */
-@SkipForDialects({
-		@SkipForDialect(value = SybaseDialect.class, comment = "CURRENT_TIMESTAMP not supported as default value in Sybase"),
-		@SkipForDialect(value = MySQLDialect.class, comment = "See HHH-10196", strictMatching = false)
-})
+@SkipForDialect(value = SybaseDialect.class, comment = "CURRENT_TIMESTAMP not supported as default value in Sybase")
+@SkipForDialect(value = MySQLDialect.class, comment = "See HHH-10196", strictMatching = false)
 public class DefaultGeneratedValueTest extends BaseCoreFunctionalTestCase {
 
 	@Test
@@ -64,7 +61,7 @@ public class DefaultGeneratedValueTest extends BaseCoreFunctionalTestCase {
 		assertNull( theEntity.vmCreatedSqlTimestamp );
 		assertNull( theEntity.name );
 		s.save( theEntity );
-		//TODO: Actually the values should be non-null after save
+		//TODO: Actually the values should be non-null afterQuery save
 		assertNull( theEntity.createdDate );
 		assertNull( theEntity.alwaysDate );
 		assertNull( theEntity.vmCreatedDate );
@@ -105,7 +102,7 @@ public class DefaultGeneratedValueTest extends BaseCoreFunctionalTestCase {
 		assertNull( theEntity.updated );
 		s.save( theEntity );
 
-		//TODO: Actually the value should be non-null after save
+		//TODO: Actually the value should be non-null afterQuery save
 		assertNull( theEntity.updated );
 		s.getTransaction().commit();
 		s.close();

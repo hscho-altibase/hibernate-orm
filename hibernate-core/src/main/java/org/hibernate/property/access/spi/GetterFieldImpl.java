@@ -14,8 +14,7 @@ import java.lang.reflect.Method;
 import java.util.Locale;
 import java.util.Map;
 
-import org.hibernate.boot.archive.internal.ByteArrayInputStreamAccess;
-import org.hibernate.engine.spi.SessionImplementor;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.property.access.internal.AbstractFieldSerialForm;
 
 /**
@@ -48,15 +47,20 @@ public class GetterFieldImpl implements Getter {
 			if ( type.isPrimitive() ) {
 				if ( type == Boolean.TYPE ) {
 					return Boolean.valueOf( field.getBoolean( owner ) );
-				} else if ( type == Byte.TYPE ) {
+				}
+				else if ( type == Byte.TYPE ) {
 					return Byte.valueOf( field.getByte( owner ) );
-				} else if ( type == Character.TYPE ) {
+				}
+				else if ( type == Character.TYPE ) {
 					return Character.valueOf( field.getChar( owner ) );
-				} else if ( type == Integer.TYPE ) {
+				}
+				else if ( type == Integer.TYPE ) {
 					return Integer.valueOf( field.getInt( owner ) );
-				} else if ( type == Long.TYPE ) {
+				}
+				else if ( type == Long.TYPE ) {
 					return Long.valueOf( field.getLong( owner ) );
-				} else if ( type == Short.TYPE ) {
+				}
+				else if ( type == Short.TYPE ) {
 					return Short.valueOf( field.getShort( owner ) );
 				}
 			}
@@ -78,7 +82,7 @@ public class GetterFieldImpl implements Getter {
 	}
 
 	@Override
-	public Object getForInsert(Object owner, Map mergeMap, SessionImplementor session) {
+	public Object getForInsert(Object owner, Map mergeMap, SharedSessionContractImplementor session) {
 		return get( owner );
 	}
 
