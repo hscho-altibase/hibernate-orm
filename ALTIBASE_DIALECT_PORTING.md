@@ -21,7 +21,7 @@ Hibernate 공식 배포사이트에서 각 버전별 core 라이브러리를 다운로드한다.
 * 위에 링크되어 있는 라이브러리에는 AltibaseDialect.class 가 포함되어 있지 않기때문에 수동으로 AltibaseDialect.java를 컴파일해서 넣어줘야 한다.
 
 ## AltibaseDialect.java 컴파일
-Hibernate 버전별 AltibaseDialect 소스는 아래 URL에서 다운로드 할 수 있다. 또한 Hibernate 4.2 버전부터는 AltibaseDialect.java와 더불어 AltibaseLimitHandler.java가 추가되었기 때문에 함께 컴파일해야 한다.(jdk1.6이상 필요)
+Hibernate 버전별 AltibaseDialect 소스는 아래 URL에서 다운로드 할 수 있다. 또한 Hibernate 4.2 버전부터는 AltibaseDialect.java와 더불어 AltibaseLimitHandler.java가 추가되었기 때문에 함께 컴파일해야 한다.
 
 | Hibernate Ver  |AltibaseDialect.java | AltibaseLimitHandler.java | Required JDK ver |
 |---|---|---|---|
