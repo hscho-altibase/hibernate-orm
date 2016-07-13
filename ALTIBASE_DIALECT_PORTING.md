@@ -35,19 +35,19 @@ Hibernate 버전별 AltibaseDialect 소스는 아래 URL에서 다운로드 할 수 있다. 또한 H
 1. hibernate jar 압축해제
     다운로드한 Hibernate 라이브러리 파일 중 hibernate-core-x.x.x.Final.jar 파일을 다운로드한 소스위치로 이동시키고 압축해제한다.
     
-    `mv hibernate-core-x.x.x.Final.jar 다운로드한 소스 디렉토리`
-    `cd 다운로드한 소스 디렉토리`
-    `jar xvf hibernate-core-x.x.x.Final.jar`
+        mv hibernate-core-x.x.x.Final.jar 다운로드한 소스 디렉토리
+        cd 다운로드한 소스 디렉토리
+        jar xvf hibernate-core-x.x.x.Final.jar
     
 2. AltibaseLimitHandler.java 및 AltibaseDialect.java 컴파일
 
-    `javac -d . -cp . AltibaseLimitHandler.java`
-    `javac -d . -cp . AltibaseDialect.java`
+        javac -d . -cp . AltibaseLimitHandler.java
+        javac -d . -cp . AltibaseDialect.java
     
 3. Compile이 정상적으로 되면 현재디렉토리의 하위에 다음 두개의 클래스파일이 추가된다.
 
-    `./org/hibernate/dialect/AltibaseDialect.class`
-    `./org/hibernate/dialect/pagination/AltibaseLimitHandler.class`
+        ./org/hibernate/dialect/AltibaseDialect.class
+        ./org/hibernate/dialect/pagination/AltibaseLimitHandler.class
 
 ## AltibaseDialect 클래스를 Hibernate jar파일에 포팅
 jar 명령을 통해 새로 컴파일한 AltibaseDialect 관련 클래스들을 jar로 묶는다.
