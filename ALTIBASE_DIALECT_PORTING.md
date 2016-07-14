@@ -33,6 +33,7 @@ Hibernate 버전별 AltibaseDialect 소스는 아래 URL에서 다운로드 할 수 있다. 또한 H
 |5.2(master)|https://github.com/ALTIBASE/hibernate-orm/blob/master/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/master/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   | 1.8|
 
 1. hibernate jar 압축해제
+
     다운로드한 Hibernate 라이브러리 파일 중 hibernate-core-x.x.x.Final.jar 파일을 다운로드한 소스위치로 이동시키고 압축해제한다.
     
         mv hibernate-core-x.x.x.Final.jar 다운로드한 소스 디렉토리
