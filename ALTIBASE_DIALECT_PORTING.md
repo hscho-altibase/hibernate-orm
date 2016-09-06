@@ -1,27 +1,28 @@
-# AltibaseDialect ¼öµ¿ Æ÷ÆÃ ¹æ¹ı
-ÀÌ ¹®¼­¿¡¼­´Â ¼öµ¿À¸·Î AltibaseDialect.java¸¦ ÄÄÆÄÀÏÇÏ¿© ±âÁ¸ÀÇ hibernate jarÆÄÀÏ¿¡ ÇÕÄ¡´Â ¹æ¹ıÀ» ¼³¸íÇÑ´Ù.
-hibernate core ¶óÀÌºê·¯¸®¸¦ ÅëÂ°·Î ÄÄÆÄÀÏÇÏ¿© ºôµåÇÏ´Â ¹æ¹ıÀº ¾Æ·¡¿Í °°À¸¸ç »ó¼¼ÇÑ ¼³¸íÀº [ÀÌ°÷](README.md)À» Âü°íÇÏ±â ¹Ù¶õ´Ù.
+# AltibaseDialect í¬íŒ… ë°©ë²•
+ì´ ë¬¸ì„œëŠ” Hibernateì—ì„œ Altibaseë¥¼ ì—°ë™í•˜ê¸° ìœ„í•´ AltibaseDialectë¥¼ í¬íŒ…í•˜ëŠ” ë°©ë²•ì„ ì„¤ëª…í•œë‹¤.
+## Hibernate ì „ì²´ë¹Œë“œ
+ì•„ë˜ì™€ ê°™ì´ hibernate ì „ì²´ë¹Œë“œ ëª…ë ¹ì–´ë¥¼ ì‚¬ìš©í•˜ë©´ AltibaseDialect.classê°€ í¬í•¨ëœ hibernate core ë¼ì´ë¸ŒëŸ¬ë¦¬ íŒŒì¼ì´ ìƒì„±ë˜ë©° ìì„¸í•œ ì„¤ëª…ì€ [ì´ê³³](README.md)ì„ ì°¸ê³ í•œë‹¤.
 
     git clone git://github.com/ALTIBASE/hibernate-orm.git
-    git checkout ºôµåÇÒ branch¹öÀü(¿¹:5.1)
+    git checkout ë¹Œë“œí•  branchë²„ì „(ì˜ˆ:5.1)
     cd hibernate-orm
     ./gradlew clean build
 
-## Hibernate ¶óÀÌºê·¯¸® ´Ù¿î·Îµå
-Hibernate °ø½Ä ¹èÆ÷»çÀÌÆ®¿¡¼­ °¢ ¹öÀüº° core ¶óÀÌºê·¯¸®¸¦ ´Ù¿î·ÎµåÇÑ´Ù.
+## AltibaseDialect ìˆ˜ë™ í¬íŒ…
+hibernateë¥¼ ì „ì²´ë¹Œë“œ í•  í•„ìš”ì—†ì´ AltibaseDialectê´€ë ¨ í´ë˜ìŠ¤ë§Œ ì»´íŒŒì¼í•˜ì—¬ ê¸°ì¡´ ë¼ì´ë¸ŒëŸ¬ë¦¬ì— ì¶”ê°€í•  ìˆ˜ ìˆë‹¤.
 
-* [http://hibernate.org/orm/downloads/](http://hibernate.org/orm/downloads/) ¿¡¼­ ´Ù¿î·Îµå°¡ °¡´ÉÇÏ¸ç ÇöÀç ´Ù¿î·Îµå °¡´ÉÇÑ ¹öÀüÀº ¾Æ·¡¿Í °°´Ù.
+### Hibernate ë¼ì´ë¸ŒëŸ¬ë¦¬ ë‹¤ìš´ë¡œë“œ
+Hibernate ê³µì‹ ë°°í¬ì‚¬ì´íŠ¸ì—ì„œ ê° ë²„ì „ ë³„ hibernate core ë¼ì´ë¸ŒëŸ¬ë¦¬ë¥¼ ì œê³µí•œë‹¤.
+
+* [http://hibernate.org/orm/downloads/](http://hibernate.org/orm/downloads/) ì—ì„œ ë‚´ë ¤ ë°›ì„ ìˆ˜ ìˆëŠ” ë²„ì „ì€ ì•„ë˜ì™€ ê°™ë‹¤. ì´ ë§í¬ì—ì„œ ì œê³µí•˜ëŠ” ë¼ì´ë¸ŒëŸ¬ë¦¬ëŠ” AltibaseDialect.classê°€ í¬í•¨ë˜ì–´ìˆì§€ ì•Šìœ¼ë¯€ë¡œ ë‹¤ì‹œ íŒ¨í‚¤ì§•í•˜ì—¬ í¬í•¨ì‹œì¼œì•¼ í•œë‹¤.
     * 5.2.1
     * 5.1.0
     * 5.0.9
     * 4.3.11
     * 4.2.21
 
-
-* À§¿¡ ¸µÅ©µÇ¾î ÀÖ´Â ¶óÀÌºê·¯¸®¿¡´Â AltibaseDialect.class °¡ Æ÷ÇÔµÇ¾î ÀÖÁö ¾Ê±â¶§¹®¿¡ ¼öµ¿À¸·Î AltibaseDialect.java¸¦ ÄÄÆÄÀÏÇØ¼­ ³Ö¾îÁà¾ß ÇÑ´Ù.
-
-## AltibaseDialect.java ÄÄÆÄÀÏ
-Hibernate ¹öÀüº° AltibaseDialect ¼Ò½º´Â ¾Æ·¡ URL¿¡¼­ ´Ù¿î·Îµå ÇÒ ¼ö ÀÖ´Ù. ¶ÇÇÑ Hibernate 4.2 ¹öÀüºÎÅÍ´Â AltibaseDialect.java¿Í ´õºÒ¾î AltibaseLimitHandler.java°¡ Ãß°¡µÇ¾ú±â ¶§¹®¿¡ ÇÔ²² ÄÄÆÄÀÏÇØ¾ß ÇÑ´Ù.
+## AltibaseDialect.java ì»´íŒŒì¼
+Hibernateë²„ì „ì— ë”°ë¥¸ AltibaseDialect.javaíŒŒì¼ì€ì•„ë˜ ë§í¬ì—ì„œ ë‚´ë ¤ ë°›ì„ ìˆ˜ ìˆë‹¤. Hibernate 4.2 ë²„ì „ë¶€í„°ëŠ”AltibaseLimitHandler.javaê³¼ í•¨ê»˜ ì»´íŒŒì¼ í•´ì•¼ í•œë‹¤.
 
 | Hibernate Ver  |AltibaseDialect.java | AltibaseLimitHandler.java | Required JDK ver |
 |---|---|---|---|
@@ -32,26 +33,25 @@ Hibernate ¹öÀüº° AltibaseDialect ¼Ò½º´Â ¾Æ·¡ URL¿¡¼­ ´Ù¿î·Îµå ÇÒ ¼ö ÀÖ´Ù. ¶ÇÇÑ H
 |5.1|https://github.com/ALTIBASE/hibernate-orm/blob/5.1/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/5.1/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   | 1.6 |
 |5.2(master)|https://github.com/ALTIBASE/hibernate-orm/blob/master/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/master/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   | 1.8|
 
-1. hibernate jar ¾ĞÃàÇØÁ¦
+1. hibernate jar ì••ì¶•í•´ì œ
 
-    ´Ù¿î·ÎµåÇÑ Hibernate ¶óÀÌºê·¯¸® ÆÄÀÏ Áß hibernate-core-x.x.x.Final.jar ÆÄÀÏÀ» ´Ù¿î·ÎµåÇÑ ¼Ò½ºÀ§Ä¡·Î ÀÌµ¿½ÃÅ°°í ¾ĞÃàÇØÁ¦ÇÑ´Ù.
+    ë‚´ë ¤ ë°›ì€ Hibernate ë¼ì´ë¸ŒëŸ¬ë¦¬ íŒŒì¼ ì¤‘ì— hibernate-core-x.x.x.Final.jar íŒŒì¼ì„ javaíŒŒì¼ì´ ìœ„ì¹˜í•œ ë””ë ‰í† ë¦¬ë¡œ ì´ë™ì‹œí‚¤ê³  ì••ì¶•ì„ í‘¼ë‹¤.
     
-        mv hibernate-core-x.x.x.Final.jar ´Ù¿î·ÎµåÇÑ ¼Ò½º µğ·ºÅä¸®
-        cd ´Ù¿î·ÎµåÇÑ ¼Ò½º µğ·ºÅä¸®
+        mv hibernate-core-x.x.x.Final.jar íŒŒì¼ì´ ìœ„ì¹˜í•œ ë””ë ‰í† ë¦¬
+        cd javaíŒŒì¼ì´ ìœ„ì¹˜í•œ ë””ë ‰í† ë¦¬
         jar xvf hibernate-core-x.x.x.Final.jar`
     
-2. AltibaseLimitHandler.java ¹× AltibaseDialect.java ÄÄÆÄÀÏ
+2. AltibaseLimitHandler.java ë° AltibaseDialect.java íŒŒì¼ì„ ì»´íŒŒì¼í•œë‹¤.
 
         javac -d . -cp . AltibaseLimitHandler.java
         javac -d . -cp . AltibaseDialect.java
     
-3. CompileÀÌ Á¤»óÀûÀ¸·Î µÇ¸é ÇöÀçµğ·ºÅä¸®ÀÇ ÇÏÀ§¿¡ ´ÙÀ½ µÎ°³ÀÇ Å¬·¡½ºÆÄÀÏÀÌ Ãß°¡µÈ´Ù.
+3. ì»´íŒŒì¼ì´ ì™„ë£Œë˜ë©´ í˜„ì¬ ë””ë ‰í† ë¦¬ í•˜ìœ„ì— ë‹¤ìŒê³¼ ê°™ì€ ë‘ ê°œì˜ í´ë˜ìŠ¤ íŒŒì¼ì´ ìƒì„±ëœë‹¤.
 
         ./org/hibernate/dialect/AltibaseDialect.class
         ./org/hibernate/dialect/pagination/AltibaseLimitHandler.class
 
-## AltibaseDialect Å¬·¡½º¸¦ Hibernate jarÆÄÀÏ¿¡ Æ÷ÆÃ
-jar ¸í·ÉÀ» ÅëÇØ »õ·Î ÄÄÆÄÀÏÇÑ AltibaseDialect °ü·Ã Å¬·¡½ºµéÀ» jar·Î ¹­´Â´Ù.
+### AltibaseDialect í´ë˜ìŠ¤ë¥¼ Hibernate jaríŒŒì¼ì— í¬íŒ…
+jarëª…ë ¹ì–´ë¡œ ìƒˆë¡œ ì»´íŒŒì¼í•œ AltibaseDialectí´ë˜ìŠ¤ë“¤ì„ jarë¡œ ë¬¶ëŠ”ë‹¤
 
-    rm AltibaseLimitHandler.java AltibaseDialect.java
     jar -cvfm hibernate-core-x.x.x.Final.jar META-INF/MANIFEST.MF .
