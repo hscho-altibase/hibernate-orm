@@ -1,57 +1,99 @@
-# AltibaseDialect 수동 포팅 방법
-이 문서에서는 수동으로 AltibaseDialect.java를 컴파일하여 기존의 hibernate jar파일에 합치는 방법을 설명한다.
-hibernate core 라이브러리를 통째로 컴파일하여 빌드하는 방법은 아래와 같으며 상세한 설명은 [이곳](README.md)을 참고하기 바란다.
-
-    git clone git://github.com/ALTIBASE/hibernate-orm.git
-    git checkout 빌드할 branch버전(예:5.1)
-    cd hibernate-orm
-    ./gradlew clean build
-
-## Hibernate 라이브러리 다운로드
-Hibernate 공식 배포사이트에서 각 버전별 core 라이브러리를 다운로드한다.
-
-* [http://hibernate.org/orm/downloads/](http://hibernate.org/orm/downloads/) 에서 다운로드가 가능하며 현재 다운로드 가능한 버전은 아래와 같다.
-    * 5.2.1
-    * 5.1.0
-    * 5.0.9
-    * 4.3.11
-    * 4.2.21
+<img src="http://static.jboss.org/hibernate/images/hibernate_logo_whitebkg_200px.png" />
 
 
-* 위에 링크되어 있는 라이브러리에는 AltibaseDialect.class 가 포함되어 있지 않기때문에 수동으로 AltibaseDialect.java를 컴파일해서 넣어줘야 한다.
+Hibernate ORM is a component/library providing Object/Relational Mapping (ORM) support
+to applications and other components/libraries.  It is also provides an implementation of the
+JPA specification, which is the standardized Java specification for ORM.  See 
+[Hibernate.org](http://hibernate.org/orm/) for additional information. 
 
-## AltibaseDialect.java 컴파일
-Hibernate 버전별 AltibaseDialect 소스는 아래 URL에서 다운로드 할 수 있다. 또한 Hibernate 4.2 버전부터는 AltibaseDialect.java와 더불어 AltibaseLimitHandler.java가 추가되었기 때문에 함께 컴파일해야 한다.
+[![Build Status](http://ci.hibernate.org/job/hibernate-orm-master-h2/badge/icon)](http://ci.hibernate.org/job/hibernate-orm-master-h2/)
 
-| Hibernate Ver  |AltibaseDialect.java | AltibaseLimitHandler.java | Required JDK ver |
-|---|---|---|---|
-|3.6|https://github.com/ALTIBASE/hibernate-orm/blob/3.6/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java |   | 1.5 |
-|4.2|https://github.com/ALTIBASE/hibernate-orm/blob/4.2/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/4.2/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java  | 1.6  |
-|4.3|https://github.com/ALTIBASE/hibernate-orm/blob/4.3/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/4.3/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   | 1.6 |
-|5.0|https://github.com/ALTIBASE/hibernate-orm/blob/5.0/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/5.0/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   | 1.6 |
-|5.1|https://github.com/ALTIBASE/hibernate-orm/blob/5.1/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/5.1/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   | 1.6 |
-|5.2(master)|https://github.com/ALTIBASE/hibernate-orm/blob/master/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/master/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   | 1.8|
 
-1. hibernate jar 압축해제
+Quickstart
+==========
 
-    다운로드한 Hibernate 라이브러리 파일 중 hibernate-core-x.x.x.Final.jar 파일을 다운로드한 소스위치로 이동시키고 압축해제한다.
-    
-        mv hibernate-core-x.x.x.Final.jar 다운로드한 소스 디렉토리
-        cd 다운로드한 소스 디렉토리
-        jar xvf hibernate-core-x.x.x.Final.jar`
-    
-2. AltibaseLimitHandler.java 및 AltibaseDialect.java 컴파일
+     git clone git://github.com/ALTIBASE/hibernate-orm.git
+     cd hibernate-orm
+     ./gradlew clean build
 
-        javac -d . -cp . AltibaseLimitHandler.java
-        javac -d . -cp . AltibaseDialect.java
-    
-3. Compile이 정상적으로 되면 현재디렉토리의 하위에 다음 두개의 클래스파일이 추가된다.
+The build requires a Java 8 JDK as JAVA_HOME, but will ensure Java 6 compatibility.
+ 
 
-        ./org/hibernate/dialect/AltibaseDialect.class
-        ./org/hibernate/dialect/pagination/AltibaseLimitHandler.class
+Resources
+=========
+     
+Hibernate uses [Gradle](http://gradle.org) as its build tool.  See the _Gradle Primer_ section below if you are new to
+Gradle.
 
-## AltibaseDialect 클래스를 Hibernate jar파일에 포팅
-jar 명령을 통해 새로 컴파일한 AltibaseDialect 관련 클래스들을 jar로 묶는다.
+Contributors should read the [Contributing Guide](CONTRIBUTING.md)
 
-    rm AltibaseLimitHandler.java AltibaseDialect.java
-    jar -cvfm hibernate-core-x.x.x.Final.jar META-INF/MANIFEST.MF .
+See the guides for setting up [IntelliJ](https://developer.jboss.org/wiki/ContributingToHibernateUsingIntelliJ) or
+[Eclipse](https://developer.jboss.org/wiki/ContributingToHibernateUsingEclipse) as your development environment.  [Building Hibernate ORM](https://community.jboss.org/wiki/BuildingHibernateORM4x) 
+is somewhat outdated, but still has
+
+
+CI Builds
+=========
+
+Hibernate makes use of [Jenkins](http://jenkins-ci.org) for its CI needs.  The project is built continuous on each 
+push to the upstream repository.   Overall there are a few different jobs, all of which can be seen at 
+[http://ci.hibernate.org/view/ORM/](http://ci.hibernate.org/view/ORM/)
+
+
+
+Gradle primer
+=============
+
+This section describes some of the basics developers and contributors new to Gradle might 
+need to know to get productive quickly.  The Gradle documentation is very well done; 2 in 
+particular that are indispensable:
+
+* [Gradle User Guide](https://docs.gradle.org/current/userguide/userguide_single.html) is a typical user guide in that
+it follows a topical approach to describing all of the capabilities of Gradle.
+* [Gradle DSL Guide](https://docs.gradle.org/current/dsl/index.html) is quite unique and excellent in quickly
+getting up to speed on certain aspects of Gradle.
+
+
+Using the Gradle Wrapper
+------------------------
+
+For contributors who do not otherwise use Gradle and do not want to install it, Gradle offers a very cool
+features called the wrapper.  It lets you run Gradle builds without a previously installed Gradle distro in 
+a zero-conf manner.  Hibernate configures the Gradle wrapper for you.  If you would rather use the wrapper and 
+not install Gradle (or to make sure you use the version of Gradle intended for older builds) you would just use
+the command `gradlew` (or `gradlew.bat`) rather than `gradle` (or `gradle.bat`) in the following discussions.  
+Note that `gradlew` is only available in the project's root dir, so depending on your `pwd` you may need to adjust 
+the path to `gradlew` as well.
+
+Executing Tasks
+---------------
+
+Gradle uses the concept of build tasks (equivalent to Ant targets or Maven phases/goals). You can get a list of
+available tasks via 
+
+    gradle tasks
+
+To execute a task across all modules, simply perform that task from the root directory.  Gradle will visit each
+sub-project and execute that task if the sub-project defines it.  To execute a task in a specific module you can 
+either:
+
+1. `cd` into that module directory and execute the task
+2. name the "task path".  For example, in order to run the tests for the _hibernate-core_ module from the root directory you could say `gradle hibernate-core:test`
+
+Common Java related tasks
+-------------------------
+
+* _build_ - Assembles (jars) and tests this project
+* _buildDependents_ - Assembles and tests this project and all projects that depend on it.  So think of running this in hibernate-core, Gradle would assemble and test hibernate-core as well as hibernate-envers (because envers depends on core)
+* _classes_ - Compiles the main classes
+* _testClasses_ - Compiles the test classes
+* _compile_ (Hibernate addition) - Performs all compilation tasks including staging resources from both main and test
+* _jar_ - Generates a jar archive with all the compiled classes
+* _test_ - Runs the tests
+* _publish_ - Think Maven deploy
+* _publishToMavenLocal_ - Installs the project jar to your local maven cache (aka ~/.m2/repository).  Note that Gradle 
+never uses this, but it can be useful for testing your build with other local Maven-based builds.
+* _eclipse_ - Generates an Eclipse project
+* _idea_ - Generates an IntelliJ/IDEA project (although the preferred approach is to use IntelliJ's Gradle import).
+* _clean_ - Cleans the build directory
+
