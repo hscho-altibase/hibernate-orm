@@ -2,7 +2,7 @@
 This document describes how to port AltibaseDialect to Hibernate to work with Altibase.
 
 ## Hibernate full build
-If you use the hibernate full build command as below, hibernate core library file containing AltibaseDialect.class will be created and detailed explanation can be found [here](README.md)을 참고한다.
+If you use the hibernate full build command as below, hibernate core library file containing AltibaseDialect.class will be created and detailed explanation can be found [here](README.md).
 
     git clone git://github.com/ALTIBASE/hibernate-orm.git
     git checkout proper branch(ex:5.1)
