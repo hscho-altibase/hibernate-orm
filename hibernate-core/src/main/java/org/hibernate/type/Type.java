@@ -51,7 +51,7 @@ public interface Type extends Serializable {
 	 * A {@link CollectionType} is additionally an {@link AssociationType}; so if this method returns true,
 	 * {@link #isAssociationType()} should also return true.
 	 *
-	 * @return True if this type is also an {@link CollectionType} implementor; false otherwise.
+	 * @return True if this type is also a {@link CollectionType} implementor; false otherwise.
 	 */
 	boolean isCollectionType();
 
@@ -82,7 +82,7 @@ public interface Type extends Serializable {
 	 * version of {@code (type instanceof CompositeType.class)}.  A component type may own collections or
 	 * associations and hence must provide certain extra functionality.
 	 *
-	 * @return True if this type is also an {@link CompositeType} implementor; false otherwise.
+	 * @return True if this type is also a {@link CompositeType} implementor; false otherwise.
 	 */
 	boolean isComponentType();
 
@@ -222,7 +222,7 @@ public interface Type extends Serializable {
 	 * @throws HibernateException A problem occurred calculating the hash code
 	 */
 	int getHashCode(Object x, SessionFactoryImplementor factory) throws HibernateException;
-	
+
 	/**
 	 * Perform a {@link java.util.Comparator} style comparison between values
 	 *
@@ -235,7 +235,7 @@ public interface Type extends Serializable {
 
 	/**
 	 * Should the parent be considered dirty, given both the old and current value?
-	 * 
+	 *
 	 * @param old the old value
 	 * @param current the current value
 	 * @param session The session from which the request originated.
@@ -427,9 +427,9 @@ public interface Type extends Serializable {
 	 * @throws HibernateException An error from Hibernate
 	 */
 	Object assemble(Serializable cached, SharedSessionContractImplementor session, Object owner) throws HibernateException;
-	
+
 	/**
-	 * Called beforeQuery assembling a query result set from the query cache, to allow batch fetching
+	 * Called before assembling a query result set from the query cache, to allow batch fetching
 	 * of entities missing from the second-level cache.
 	 *
 	 * @param cached The key
@@ -444,7 +444,7 @@ public interface Type extends Serializable {
 	 *     <li>in the case of an entity or collection type, the key</li>
 	 *     <li>otherwise, the value itself</li>
 	 * </ul>
-	 * 
+	 *
 	 * @param rs The JDBC result set
 	 * @param names the column names making up this type value (use to read from result set)
 	 * @param session The originating session
@@ -461,22 +461,32 @@ public interface Type extends Serializable {
 	throws HibernateException, SQLException;
 
 	/**
+	 * @see #resolve(Object, SharedSessionContractImplementor, Object, Boolean)
+	 */
+	Object resolve(Object value, SharedSessionContractImplementor session, Object owner)
+	throws HibernateException;
+
+	/**
 	 * The second phase of 2-phase loading.  Only really pertinent for entities and collections.  Here we resolve the
 	 * identifier to an entity or collection instance
-	 * 
+	 *
 	 * @param value an identifier or value returned by <tt>hydrate()</tt>
 	 * @param owner the parent entity
 	 * @param session the session
-	 * 
+	 * @param overridingEager can override eager from the mapping. For example because of {@link org.hibernate.engine.spi.LoadQueryInfluencers}
+	 *   If null, then it does not override. If true or false then it overrides the mapping value.
+	 *
 	 * @return the given value, or the value associated with the identifier
 	 *
 	 * @throws HibernateException An error from Hibernate
 	 *
 	 * @see #hydrate
 	 */
-	Object resolve(Object value, SharedSessionContractImplementor session, Object owner)
-	throws HibernateException;
-	
+	default Object resolve(Object value, SharedSessionContractImplementor session, Object owner, Boolean overridingEager)
+	throws HibernateException {
+		return resolve(value, session, owner);
+	}
+
 	/**
 	 * Given a hydrated, but unresolved value, return a value that may be used to reconstruct property-ref
 	 * associations.
@@ -491,7 +501,7 @@ public interface Type extends Serializable {
 	 */
 	Object semiResolve(Object value, SharedSessionContractImplementor session, Object owner)
 	throws HibernateException;
-	
+
 	/**
 	 * As part of 2-phase loading, when we perform resolving what is the resolved type for this type?  Generally
 	 * speaking the type and its semi-resolved type will be the same.  The main deviation from this is in the
@@ -526,7 +536,7 @@ public interface Type extends Serializable {
 			SharedSessionContractImplementor session,
 			Object owner,
 			Map copyCache) throws HibernateException;
-	
+
 	/**
 	 * During merge, replace the existing (target) value in the entity we are merging to
 	 * with a new (original) value from the detached entity we are merging. For immutable
@@ -552,16 +562,16 @@ public interface Type extends Serializable {
 			Object owner,
 			Map copyCache,
 			ForeignKeyDirection foreignKeyDirection) throws HibernateException;
-	
+
 	/**
 	 * Given an instance of the type, return an array of boolean, indicating
 	 * which mapped columns would be null.
-	 * 
+	 *
 	 * @param value an instance of the type
 	 * @param mapping The mapping abstraction
 	 *
 	 * @return array indicating column nullness for a value instance
 	 */
 	boolean[] toColumnNullness(Object value, Mapping mapping);
-	
+
 }

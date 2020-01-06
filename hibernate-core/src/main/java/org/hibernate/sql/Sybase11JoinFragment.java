@@ -8,7 +8,7 @@ package org.hibernate.sql;
 
 
 /**
- * An old Sybase-style join (beforeQuery Sybase supported the ANSI style "inner join" etc syntax)
+ * An old Sybase-style join (before Sybase supported the ANSI style "inner join" etc syntax)
  * This is needed for Sybase 11.9.2 and earlier, using the HQL 2.* syntax with Collections.
  *
  * @author Colm O' Flaherty
@@ -44,6 +44,49 @@ public class Sybase11JoinFragment extends JoinFragment {
 					.append( alias )
 					.append( '.' )
 					.append( pkColumns[j] );
+		}
+	}
+
+	public void addJoin(String tableName, String alias, String[][] fkColumns, String[] pkColumns, JoinType joinType) {
+
+		addCrossJoin( tableName, alias );
+
+		if ( fkColumns.length > 1 ) {
+			afterWhere.append( "(" );
+		}
+		for ( int i = 0; i < fkColumns.length; i++ ) {
+			afterWhere.append( " and " );
+			for ( int j = 0; j < fkColumns[i].length; j++ ) {
+				//full joins are not supported.. yet!
+				if ( joinType == JoinType.FULL_JOIN ) {
+					throw new UnsupportedOperationException();
+				}
+
+				afterWhere.append( fkColumns[i][j] )
+						.append( " " );
+
+				if ( joinType == JoinType.LEFT_OUTER_JOIN ) {
+					afterWhere.append( '*' );
+				}
+				afterWhere.append( '=' );
+				if ( joinType == JoinType.RIGHT_OUTER_JOIN ) {
+					afterWhere.append( "*" );
+				}
+
+				afterWhere.append( " " )
+						.append( alias )
+						.append( '.' )
+						.append( pkColumns[j] );
+				if ( j < fkColumns[i].length - 1 ) {
+					afterWhere.append( " and " );
+				}
+			}
+			if ( i < fkColumns.length - 1 ) {
+				afterWhere.append( " or " );
+			}
+		}
+		if ( fkColumns.length > 1 ) {
+			afterWhere.append( ")" );
 		}
 	}
 
@@ -103,6 +146,17 @@ public class Sybase11JoinFragment extends JoinFragment {
 			String tableName,
 			String alias,
 			String[] fkColumns,
+			String[] pkColumns,
+			JoinType joinType,
+			String on) {
+		addJoin( tableName, alias, fkColumns, pkColumns, joinType );
+		addCondition( on );
+	}
+
+	public void addJoin(
+			String tableName,
+			String alias,
+			String[][] fkColumns,
 			String[] pkColumns,
 			JoinType joinType,
 			String on) {

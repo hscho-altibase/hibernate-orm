@@ -15,6 +15,7 @@ import org.hibernate.HibernateException;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.property.access.spi.Getter;
+import org.hibernate.proxy.ProxyFactory;
 import org.hibernate.tuple.Tuplizer;
 
 /**
@@ -186,7 +187,7 @@ public interface EntityTuplizer extends Tuplizer {
 	Object getPropertyValue(Object entity, String propertyName) throws HibernateException;
 
     /**
-     * Called just afterQuery the entities properties have been initialized.
+     * Called just after the entities properties have been initialized.
      *
      * @param entity The entity being initialized.
      * @param session The session initializing this entity.
@@ -273,4 +274,8 @@ public interface EntityTuplizer extends Tuplizer {
 	 * @return The getter for the version property.
 	 */
 	Getter getVersionGetter();
+
+	default ProxyFactory getProxyFactory() {
+		return null;
+	}
 }

@@ -77,7 +77,7 @@ public class MapAttributeJoin<O,K,V>
 	@Override
 	@SuppressWarnings({ "unchecked" })
 	public Expression<Map.Entry<K, V>> entry() {
-		return new MapEntryExpression( criteriaBuilder(), Map.Entry.class, this, getAttribute() );
+		return new MapEntryExpression( criteriaBuilder(), Map.Entry.class, this );
 	}
 
 	@Override
@@ -146,16 +146,6 @@ public class MapAttributeJoin<O,K,V>
 		protected void setAlias(String alias) {
 			super.setAlias( alias );
 			original.setAlias( alias );
-		}
-
-		@Override
-		public boolean shouldBeRendered() {
-			if ( getJoins().size() > 0 ) {
-				return true;
-			}
-			else {
-				return false;
-			}
 		}
 
 		@Override

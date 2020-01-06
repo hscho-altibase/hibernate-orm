@@ -6,6 +6,7 @@
  */
 package org.hibernate.event.internal;
 
+import java.io.Serializable;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
@@ -23,6 +24,8 @@ import org.hibernate.event.spi.PersistEventListener;
 import org.hibernate.id.ForeignGenerator;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
+import org.hibernate.jpa.event.spi.CallbackRegistry;
+import org.hibernate.jpa.event.spi.CallbackRegistryConsumer;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.pretty.MessageHelper;
 import org.hibernate.proxy.HibernateProxy;
@@ -34,7 +37,9 @@ import org.hibernate.proxy.LazyInitializer;
  *
  * @author Gavin King
  */
-public class DefaultPersistEventListener extends AbstractSaveEventListener implements PersistEventListener {
+public class DefaultPersistEventListener
+		extends AbstractSaveEventListener
+		implements PersistEventListener, CallbackRegistryConsumer {
 	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( DefaultPersistEventListener.class );
 
 	@Override
@@ -52,7 +57,6 @@ public class DefaultPersistEventListener extends AbstractSaveEventListener imple
 	 *
 	 * @param event The create event to be handled.
 	 *
-	 * @throws HibernateException
 	 */
 	public void onPersist(PersistEvent event) throws HibernateException {
 		onPersist( event, new IdentityHashMap( 10 ) );
@@ -63,7 +67,6 @@ public class DefaultPersistEventListener extends AbstractSaveEventListener imple
 	 *
 	 * @param event The create event to be handled.
 	 *
-	 * @throws HibernateException
 	 */
 	public void onPersist(PersistEvent event, Map createCache) throws HibernateException {
 		final SessionImplementor source = event.getSession();
@@ -95,7 +98,7 @@ public class DefaultPersistEventListener extends AbstractSaveEventListener imple
 			event.setEntityName( entityName );
 		}
 
-		final EntityEntry entityEntry = source.getPersistenceContext().getEntry( entity );
+		final EntityEntry entityEntry = source.getPersistenceContextInternal().getEntry( entity );
 		EntityState entityState = getEntityState( entity, entityName, entityEntry, source );
 		if ( entityState == EntityState.DETACHED ) {
 			// JPA 2, in its version of a "foreign generated", allows the id attribute value
@@ -157,7 +160,7 @@ public class DefaultPersistEventListener extends AbstractSaveEventListener imple
 
 		//TODO: check that entry.getIdentifier().equals(requestedId)
 
-		final Object entity = source.getPersistenceContext().unproxy( event.getObject() );
+		final Object entity = source.getPersistenceContextInternal().unproxy( event.getObject() );
 		final EntityPersister persister = source.getEntityPersister( event.getEntityName(), entity );
 
 		if ( createCache.put( entity, entity ) == null ) {
@@ -183,7 +186,7 @@ public class DefaultPersistEventListener extends AbstractSaveEventListener imple
 		LOG.trace( "Saving transient instance" );
 
 		final EventSource source = event.getSession();
-		final Object entity = source.getPersistenceContext().unproxy( event.getObject() );
+		final Object entity = source.getPersistenceContextInternal().unproxy( event.getObject() );
 
 		if ( createCache.put( entity, entity ) == null ) {
 			saveWithGeneratedId( entity, event.getEntityName(), createCache, source, false );
@@ -194,17 +197,19 @@ public class DefaultPersistEventListener extends AbstractSaveEventListener imple
 	private void entityIsDeleted(PersistEvent event, Map createCache) {
 		final EventSource source = event.getSession();
 
-		final Object entity = source.getPersistenceContext().unproxy( event.getObject() );
+		final Object entity = source.getPersistenceContextInternal().unproxy( event.getObject() );
 		final EntityPersister persister = source.getEntityPersister( event.getEntityName(), entity );
 
-		LOG.tracef(
+		if ( LOG.isTraceEnabled() ) {
+			LOG.tracef(
 				"un-scheduling entity deletion [%s]",
 				MessageHelper.infoString(
-						persister,
-						persister.getIdentifier( entity, source ),
-						source.getFactory()
+					persister,
+					persister.getIdentifier( entity, source ),
+					source.getFactory()
 				)
-		);
+			);
+		}
 
 		if ( createCache.put( entity, entity ) == null ) {
 			justCascade( createCache, source, entity, persister );

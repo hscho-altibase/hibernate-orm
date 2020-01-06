@@ -16,6 +16,8 @@ import javax.persistence.criteria.Selection;
 
 import org.hibernate.HibernateException;
 import org.hibernate.Session;
+import org.hibernate.graph.RootGraph;
+import org.hibernate.graph.spi.RootGraphImplementor;
 import org.hibernate.jpa.spi.HibernateEntityManagerImplementor;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.query.spi.NativeQueryImplementor;
@@ -58,6 +60,16 @@ public interface SessionImplementor
 	@Override
 	SessionFactoryImplementor getSessionFactory();
 
+	@Override
+	<T> RootGraphImplementor<T> createEntityGraph(Class<T> rootType);
+
+	@Override
+	RootGraphImplementor<?> createEntityGraph(String graphName);
+
+	@Override
+	RootGraphImplementor<?> getEntityGraph(String graphName);
+
+
 	/**
 	 * @deprecated (since 5.2) use {@link #getHibernateFlushMode()} instead.
 	 */
@@ -90,6 +102,9 @@ public interface SessionImplementor
 
 	@Override
 	NativeQueryImplementor createNativeQuery(String sqlString, String resultSetMapping);
+
+	@Override
+	NativeQueryImplementor createSQLQuery(String sqlString);
 
 	@Override
 	NativeQueryImplementor getNamedNativeQuery(String name);

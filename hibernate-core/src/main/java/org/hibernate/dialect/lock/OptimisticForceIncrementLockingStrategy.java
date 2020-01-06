@@ -17,7 +17,7 @@ import org.hibernate.event.spi.EventSource;
 import org.hibernate.persister.entity.Lockable;
 
 /**
- * An optimistic locking strategy that forces an increment of the version (afterQuery verifying that version hasn't changed).
+ * An optimistic locking strategy that forces an increment of the version (after verifying that version hasn't changed).
  * This takes place just prior to transaction commit.
  * <p/>
  * This strategy is valid for LockMode.OPTIMISTIC_FORCE_INCREMENT
@@ -48,9 +48,9 @@ public class OptimisticForceIncrementLockingStrategy implements LockingStrategy 
 		if ( !lockable.isVersioned() ) {
 			throw new HibernateException( "[" + lockMode + "] not supported for non-versioned entities [" + lockable.getEntityName() + "]" );
 		}
-		final EntityEntry entry = session.getPersistenceContext().getEntry( object );
+		final EntityEntry entry = session.getPersistenceContextInternal().getEntry( object );
 		// Register the EntityIncrementVersionProcess action to run just prior to transaction commit.
-		( (EventSource) session ).getActionQueue().registerProcess( new EntityIncrementVersionProcess( object, entry ) );
+		( (EventSource) session ).getActionQueue().registerProcess( new EntityIncrementVersionProcess( object ) );
 	}
 
 	protected LockMode getLockMode() {

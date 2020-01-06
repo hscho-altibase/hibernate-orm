@@ -10,6 +10,7 @@ import java.sql.CallableStatement;
 import java.sql.SQLException;
 
 import org.hibernate.procedure.ParameterRegistration;
+import org.hibernate.query.QueryParameter;
 import org.hibernate.type.Type;
 
 /**
@@ -33,6 +34,7 @@ public interface ParameterRegistrationImplementor<T> extends ParameterRegistrati
 	 *
 	 * @return The Hibernate Type
 	 */
+	@Override
 	Type getHibernateType();
 
 	/**
@@ -45,6 +47,7 @@ public interface ParameterRegistrationImplementor<T> extends ParameterRegistrati
 	 * that the parameter will simply be ignored, with the assumption that the corresponding argument
 	 * defined a default value.
 	 */
+	@Override
 	boolean isPassNullsEnabled();
 
 	/**
@@ -55,7 +58,7 @@ public interface ParameterRegistrationImplementor<T> extends ParameterRegistrati
 	int[] getSqlTypes();
 
 	/**
-	 * Extract value from the statement afterQuery execution (used for OUT/INOUT parameters).
+	 * Extract value from the statement after execution (used for OUT/INOUT parameters).
 	 *
 	 * @param statement The callable statement
 	 *

@@ -6,9 +6,9 @@
  */
 package org.hibernate.testing.bytecode.enhancement;
 
-import javassist.CtClass;
-
 import org.hibernate.bytecode.enhance.spi.DefaultEnhancementContext;
+import org.hibernate.bytecode.enhance.spi.UnloadedClass;
+import org.hibernate.bytecode.enhance.spi.UnloadedField;
 
 /**
  * Enhancement context used in tests
@@ -18,7 +18,28 @@ import org.hibernate.bytecode.enhance.spi.DefaultEnhancementContext;
 public class EnhancerTestContext extends DefaultEnhancementContext {
 
 	@Override
-	public boolean doExtendedEnhancement(CtClass classDescriptor) {
+	public boolean doBiDirectionalAssociationManagement(UnloadedField field) {
 		return true;
 	}
+
+	@Override
+	public boolean doDirtyCheckingInline(UnloadedClass classDescriptor) {
+		return true;
+	}
+
+	@Override
+	public boolean doExtendedEnhancement(UnloadedClass classDescriptor) {
+		return true;
+	}
+
+	@Override
+	public boolean hasLazyLoadableAttributes(UnloadedClass classDescriptor) {
+		return true;
+	}
+
+	@Override
+	public boolean isLazyLoadable(UnloadedField field) {
+		return true;
+	}
+
 }

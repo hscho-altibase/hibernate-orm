@@ -21,7 +21,7 @@ import org.jboss.logging.Logger;
 
 /**
  * Builder for IdentifierHelper instances.  Mainly here to allow progressive
- * building of the immutable (afterQuery instantiation) IdentifierHelper.
+ * building of the immutable (after instantiation) IdentifierHelper.
  *
  * @author Steve Ebersole
  */
@@ -63,10 +63,6 @@ public class IdentifierHelperBuilder {
 	}
 
 	private static List<String> parseKeywords(String extraKeywordsString) {
-		if ( StringHelper.isEmpty( extraKeywordsString ) ) {
-			return Collections.emptyList();
-		}
-
 		return StringHelper.parseCommaSeparatedString( extraKeywordsString );
 	}
 

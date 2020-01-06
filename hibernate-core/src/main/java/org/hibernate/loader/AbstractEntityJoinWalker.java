@@ -64,8 +64,7 @@ public abstract class AbstractEntityJoinWalker extends JoinWalker {
 			final LockOptions lockOptions,
 			final AssociationInitCallback callback) throws MappingException {
 		walkEntityTree( persister, getAlias() );
-		List allAssociations = new ArrayList();
-		allAssociations.addAll( associations );
+		List allAssociations = new ArrayList( associations );
 		allAssociations.add( OuterJoinableAssociation.createRoot( persister.getEntityType(), alias, getFactory() ) );
 		initPersisters( allAssociations, lockOptions, callback );
 		initStatementString( whereString, orderByString, lockOptions );
@@ -151,7 +150,7 @@ public abstract class AbstractEntityJoinWalker extends JoinWalker {
 		String relativePropertyPath = pos >= 0
 				? fullPath.substring( pos )
 				: rootPropertyName;
-		String fetchRole = persister.getEntityName() + "." + relativePropertyPath;
+		String fetchRole = persister.getEntityName() + '.' + relativePropertyPath;
 
 		for ( String profileName : getLoadQueryInfluencers().getEnabledFetchProfileNames() ) {
 			final FetchProfile profile = getFactory().getFetchProfile( profileName );
@@ -186,7 +185,7 @@ public abstract class AbstractEntityJoinWalker extends JoinWalker {
 	}
 	
 	/**
-	 * For entities, orderings added by, for example, Criteria#addOrder need to come beforeQuery the associations' @OrderBy
+	 * For entities, orderings added by, for example, Criteria#addOrder need to come before the associations' @OrderBy
 	 * values.  However, other sub-classes of JoinWalker (BasicCollectionJoinWalker, OneToManyJoinWalker, etc.)
 	 * still need the other way around.  So, override here instead.  See HHH-7116.
 	 */

@@ -6,12 +6,13 @@
  */
 package org.hibernate.stat.spi;
 
+import org.hibernate.metamodel.model.domain.NavigableRole;
 import org.hibernate.service.Service;
 import org.hibernate.stat.Statistics;
 
 /**
- * Statistics SPI for the Hibernate core.  This is essentially the "statistic collector" API, its the contract
- * called to collect various stats.
+ * Statistics SPI for the Hibernate core.  This is essentially the
+ * "statistic collector" API, its the contract called to collect various stats.
  * 
  * @author Emmanuel Bernard
  */
@@ -137,52 +138,67 @@ public interface StatisticsImplementor extends Statistics, Service {
 	/**
 	 * Callback indicating a put into second level cache.
 	 *
-	 * @param regionName The name of the cache region
+	 * @apiNote `entityName` should be the root entity name
 	 */
-	void secondLevelCachePut(String regionName);
+	void entityCachePut(NavigableRole entityName, String regionName);
 
 	/**
 	 * Callback indicating a get from second level cache resulted in a hit.
 	 *
-	 * @param regionName The name of the cache region
+	 * @apiNote `entityName` should be the root entity name
 	 */
-	void secondLevelCacheHit(String regionName);
+	void entityCacheHit(NavigableRole entityName, String regionName);
 
 	/**
 	 * Callback indicating a get from second level cache resulted in a miss.
 	 *
+	 * @apiNote `entityName` should be the root entity name
+	 */
+	void entityCacheMiss(NavigableRole entityName, String regionName);
+
+	/**
+	 * Callback indicating a put into second level cache.
+	 *
+	 * @param collectionRole The collection's "path"
 	 * @param regionName The name of the cache region
 	 */
-	void secondLevelCacheMiss(String regionName);
-	
+	void collectionCachePut(NavigableRole collectionRole, String regionName);
+
+	/**
+	 * Callback indicating a get from second level cache resulted in a hit.
+	 *
+	 * @param collectionRole The collection's "path"
+	 * @param regionName The name of the cache region
+	 */
+	void collectionCacheHit(NavigableRole collectionRole, String regionName);
+
+	/**
+	 * Callback indicating a get from second level cache resulted in a miss.
+	 *
+	 * @param collectionRole The collection's "path"
+	 * @param regionName The name of the cache region
+	 */
+	void collectionCacheMiss(NavigableRole collectionRole, String regionName);
+
 	/**
 	 * Callback indicating a put into natural id cache.
-	 *
-	 * @param regionName The name of the cache region
 	 */
-	void naturalIdCachePut(String regionName);
-	
+	void naturalIdCachePut(NavigableRole rootEntityName, String regionName);
+
 	/**
 	 * Callback indicating a get from natural id cache resulted in a hit.
-	 *
-	 * @param regionName The name of the cache region
 	 */
-	void naturalIdCacheHit(String regionName);
+	void naturalIdCacheHit(NavigableRole rootEntityName, String regionName);
 	
 	/**
 	 * Callback indicating a get from natural id cache resulted in a miss.
-	 *
-	 * @param regionName The name of the cache region
 	 */
-	void naturalIdCacheMiss(String regionName);
+	void naturalIdCacheMiss(NavigableRole rootEntityName, String regionName);
 
 	/**
 	 * Callback indicating execution of a natural id query
-	 *
-	 * @param regionName The name of the cache region
-	 * @param time execution time
 	 */
-	void naturalIdQueryExecuted(String regionName, long time);
+	void naturalIdQueryExecuted(String rootEntityName, long executionTime);
 
 	/**
 	 * Callback indicating a put into the query cache.
@@ -217,7 +233,6 @@ public interface StatisticsImplementor extends Statistics, Service {
 	 */
 	void queryExecuted(String hql, int rows, long time);
 
-
 	/**
 	 * Callback indicating a hit to the timestamp cache
 	 */
@@ -232,4 +247,23 @@ public interface StatisticsImplementor extends Statistics, Service {
 	 * Callback indicating a put to the timestamp cache
 	 */
 	void updateTimestampsCachePut();
+
+	/**
+	 * Callback indicating a get from the query plan cache resulted in a hit.
+	 *
+	 * @param hql The query
+	 */
+	default void queryPlanCacheHit(String hql) {
+		//For backward compatibility
+	}
+
+	/**
+	 * Callback indicating compilation of a sql/hql query
+	 *
+	 * @param hql The query
+	 * @param microseconds execution time
+	 */
+	default void queryCompiled(String hql, long microseconds) {
+		//For backward compatibility
+	}
 }

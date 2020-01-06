@@ -29,9 +29,10 @@ public class OneToOneType extends EntityType {
 	private final ForeignKeyDirection foreignKeyType;
 	private final String propertyName;
 	private final String entityName;
+	private final boolean constrained;
 
 	/**
-	 * @deprecated Use {@link #OneToOneType(TypeFactory.TypeScope, String, ForeignKeyDirection, boolean, String, boolean, boolean, String, String)}
+	 * @deprecated Use {@link #OneToOneType(TypeFactory.TypeScope, String, ForeignKeyDirection, boolean, String, boolean, boolean, String, String, boolean)}
 	 *  instead.
 	 */
 	@Deprecated
@@ -47,6 +48,11 @@ public class OneToOneType extends EntityType {
 		this( scope, referencedEntityName, foreignKeyType, uniqueKeyPropertyName == null, uniqueKeyPropertyName, lazy, unwrapProxy, entityName, propertyName );
 	}
 
+	/**
+	 * @deprecated Use {@link #OneToOneType(TypeFactory.TypeScope, String, ForeignKeyDirection, boolean, String, boolean, boolean, String, String, boolean)}
+	 *  instead.
+	 */
+	@Deprecated
 	public OneToOneType(
 			TypeFactory.TypeScope scope,
 			String referencedEntityName,
@@ -57,10 +63,33 @@ public class OneToOneType extends EntityType {
 			boolean unwrapProxy,
 			String entityName,
 			String propertyName) {
+		this( scope, referencedEntityName, foreignKeyType, referenceToPrimaryKey, uniqueKeyPropertyName, lazy, unwrapProxy, entityName, propertyName, foreignKeyType != ForeignKeyDirection.TO_PARENT );
+	}
+
+	public OneToOneType(
+			TypeFactory.TypeScope scope,
+			String referencedEntityName,
+			ForeignKeyDirection foreignKeyType,
+			boolean referenceToPrimaryKey,
+			String uniqueKeyPropertyName,
+			boolean lazy,
+			boolean unwrapProxy,
+			String entityName,
+			String propertyName,
+			boolean constrained) {
 		super( scope, referencedEntityName, referenceToPrimaryKey, uniqueKeyPropertyName, !lazy, unwrapProxy );
 		this.foreignKeyType = foreignKeyType;
 		this.propertyName = propertyName;
 		this.entityName = entityName;
+		this.constrained = constrained;
+	}
+
+	public OneToOneType(OneToOneType original, String superTypeEntityName) {
+		super( original, superTypeEntityName );
+		this.foreignKeyType = original.foreignKeyType;
+		this.propertyName = original.propertyName;
+		this.entityName = original.entityName;
+		this.constrained = original.constrained;
 	}
 
 	@Override
@@ -74,7 +103,7 @@ public class OneToOneType extends EntityType {
 			final EntityPersister ownerPersister = session.getFactory().getMetamodel().entityPersister( entityName );
 			final Serializable id = session.getContextEntityIdentifier( owner );
 			final EntityKey entityKey = session.generateEntityKey( id, ownerPersister );
-			return session.getPersistenceContext().isPropertyNull( entityKey, getPropertyName() );
+			return session.getPersistenceContextInternal().isPropertyNull( entityKey, getPropertyName() );
 		}
 		else {
 			return false;
@@ -114,11 +143,6 @@ public class OneToOneType extends EntityType {
 	}
 
 	@Override
-	public void nullSafeSet(PreparedStatement st, Object value, int index, SharedSessionContractImplementor session) {
-		//nothing to do
-	}
-
-	@Override
 	public boolean isOneToOne() {
 		return true;
 	}
@@ -153,8 +177,8 @@ public class OneToOneType extends EntityType {
 	}
 
 	@Override
-	protected boolean isNullable() {
-		return foreignKeyType==ForeignKeyDirection.TO_PARENT;
+	public boolean isNullable() {
+		return !constrained;
 	}
 
 	@Override

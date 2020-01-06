@@ -28,8 +28,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class AutoFlushTest extends BaseEntityManagerFunctionalTestCase {
 
-	private static final Logger log = Logger.getLogger( AutoFlushTest.class );
-
 	@Override
 	protected Class<?>[] getAnnotatedClasses() {
 		return new Class<?>[] {
@@ -92,7 +90,7 @@ public class AutoFlushTest extends BaseEntityManagerFunctionalTestCase {
 	@Test
 	public void testFlushAutoSQL() {
 		doInJPA( this::entityManagerFactory, entityManager -> {
-			entityManager.createNativeQuery( "delete from Person" ).executeUpdate();;
+			entityManager.createNativeQuery( "delete from Person" ).executeUpdate();
 		} );
 		doInJPA( this::entityManagerFactory, entityManager -> {
 			log.info( "testFlushAutoSQL" );
@@ -114,7 +112,7 @@ public class AutoFlushTest extends BaseEntityManagerFunctionalTestCase {
 	@Test
 	public void testFlushAutoSQLNativeSession() {
 		doInJPA( this::entityManagerFactory, entityManager -> {
-			entityManager.createNativeQuery( "delete from Person" ).executeUpdate();;
+			entityManager.createNativeQuery( "delete from Person" ).executeUpdate();
 		} );
 		doInJPA( this::entityManagerFactory, entityManager -> {
 			log.info( "testFlushAutoSQLNativeSession" );
@@ -127,7 +125,7 @@ public class AutoFlushTest extends BaseEntityManagerFunctionalTestCase {
 			entityManager.persist( person );
 			Session session = entityManager.unwrap(Session.class);
 
-			// for this to work, the Session/EntityManager must be put into COMMIT FlushMode
+			// For this to work, the Session/EntityManager must be put into COMMIT FlushMode
 			//  - this is a change since 5.2 to account for merging EntityManager functionality
 			// 		directly into Session.  Flushing would be the JPA-spec compliant behavior,
 			//		so we know do that by default.
@@ -136,16 +134,16 @@ public class AutoFlushTest extends BaseEntityManagerFunctionalTestCase {
 			//session.setHibernateFlushMode( FlushMode.COMMIT );
 
 			assertTrue(((Number) session
-					.createSQLQuery( "select count(*) from Person")
+					.createNativeQuery( "select count(*) from Person")
 					.uniqueResult()).intValue() == 0 );
-			//end::flushing-auto-flush-sql-native-example[\]
+			//end::flushing-auto-flush-sql-native-example[]
 		} );
 	}
 
 	@Test
 	public void testFlushAutoSQLSynchronization() {
 		doInJPA( this::entityManagerFactory, entityManager -> {
-			entityManager.createNativeQuery( "delete from Person" ).executeUpdate();;
+			entityManager.createNativeQuery( "delete from Person" ).executeUpdate();
 		} );
 		doInJPA( this::entityManagerFactory, entityManager -> {
 			log.info( "testFlushAutoSQLSynchronization" );
@@ -159,7 +157,7 @@ public class AutoFlushTest extends BaseEntityManagerFunctionalTestCase {
 			Session session = entityManager.unwrap( Session.class );
 
 			assertTrue(((Number) session
-					.createSQLQuery( "select count(*) from Person")
+					.createNativeQuery( "select count(*) from Person")
 					.addSynchronizedEntityClass( Person.class )
 					.uniqueResult()).intValue() == 1 );
 			//end::flushing-auto-flush-sql-synchronization-example[]
@@ -176,6 +174,10 @@ public class AutoFlushTest extends BaseEntityManagerFunctionalTestCase {
 
 		private String name;
 
+		//Getters and setters are omitted for brevity
+
+	//end::flushing-auto-flush-jpql-entity-example[]
+
 		public Person() {}
 
 		public Person(String name) {
@@ -189,7 +191,7 @@ public class AutoFlushTest extends BaseEntityManagerFunctionalTestCase {
 		public String getName() {
 			return name;
 		}
-
+	//tag::flushing-auto-flush-jpql-entity-example[]
 	}
 
 	@Entity(name = "Advertisement")
@@ -200,6 +202,10 @@ public class AutoFlushTest extends BaseEntityManagerFunctionalTestCase {
 		private Long id;
 
 		private String title;
+
+		//Getters and setters are omitted for brevity
+
+	//end::flushing-auto-flush-jpql-entity-example[]
 
 		public Long getId() {
 			return id;
@@ -216,6 +222,7 @@ public class AutoFlushTest extends BaseEntityManagerFunctionalTestCase {
 		public void setTitle(String title) {
 			this.title = title;
 		}
+	//tag::flushing-auto-flush-jpql-entity-example[]
 	}
 	//end::flushing-auto-flush-jpql-entity-example[]
 }

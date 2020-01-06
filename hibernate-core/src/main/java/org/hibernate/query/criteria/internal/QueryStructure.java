@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+
 import javax.persistence.criteria.AbstractQuery;
 import javax.persistence.criteria.Expression;
 import javax.persistence.criteria.Fetch;
@@ -29,6 +30,8 @@ import javax.persistence.metamodel.EntityType;
 
 import org.hibernate.query.criteria.internal.compile.RenderingContext;
 import org.hibernate.query.criteria.internal.path.RootImpl;
+import org.hibernate.query.criteria.internal.path.RootImpl.TreatedRoot;
+import org.hibernate.sql.ast.Clause;
 
 /**
  * Models basic query structure.  Used as a delegate in implementing both
@@ -228,37 +231,34 @@ public class QueryStructure<T> implements Serializable {
 
 	@SuppressWarnings({ "unchecked" })
 	public void render(StringBuilder jpaqlQuery, RenderingContext renderingContext) {
-		jpaqlQuery.append( "select " );
-		if ( isDistinct() ) {
-			jpaqlQuery.append( "distinct " );
-		}
-		if ( getSelection() == null ) {
-			jpaqlQuery.append( locateImplicitSelection().renderProjection( renderingContext ) );
-		}
-		else {
-			jpaqlQuery.append( ( (Renderable) getSelection() ).renderProjection( renderingContext ) );
-		}
+		renderSelectClause( jpaqlQuery, renderingContext );
 
 		renderFromClause( jpaqlQuery, renderingContext );
 
-		if ( getRestriction() != null) {
-			jpaqlQuery.append( " where " )
-					.append( ( (Renderable) getRestriction() ).render( renderingContext ) );
+		renderWhereClause( jpaqlQuery, renderingContext );
+
+		renderGroupByClause( jpaqlQuery, renderingContext );
+	}
+
+	protected void renderSelectClause(StringBuilder jpaqlQuery, RenderingContext renderingContext) {
+		renderingContext.getClauseStack().push( Clause.SELECT );
+
+		try {
+			jpaqlQuery.append( "select " );
+
+			if ( isDistinct() ) {
+				jpaqlQuery.append( "distinct " );
+			}
+
+			if ( getSelection() == null ) {
+				jpaqlQuery.append( locateImplicitSelection().render( renderingContext ) );
+			}
+			else {
+				jpaqlQuery.append( ( (Renderable) getSelection() ).render( renderingContext ) );
+			}
 		}
-
-		if ( ! getGroupings().isEmpty() ) {
-			jpaqlQuery.append( " group by " );
-			String sep = "";
-			for ( Expression grouping : getGroupings() ) {
-				jpaqlQuery.append( sep )
-						.append( ( (Renderable) grouping ).render( renderingContext ) );
-				sep = ", ";
-			}
-
-			if ( getHaving() != null ) {
-				jpaqlQuery.append( " having " )
-						.append( ( (Renderable) getHaving() ).render( renderingContext ) );
-			}
+		finally {
+			renderingContext.getClauseStack().pop();
 		}
 	}
 
@@ -288,41 +288,106 @@ public class QueryStructure<T> implements Serializable {
 
 	@SuppressWarnings({ "unchecked" })
 	private void renderFromClause(StringBuilder jpaqlQuery, RenderingContext renderingContext) {
-		jpaqlQuery.append( " from " );
-		String sep = "";
-		for ( Root root : getRoots() ) {
-			( (FromImplementor) root ).prepareAlias( renderingContext );
-			jpaqlQuery.append( sep );
-			jpaqlQuery.append( ( (FromImplementor) root ).renderTableExpression( renderingContext ) );
-			sep = ", ";
-		}
+		renderingContext.getClauseStack().push( Clause.FROM );
 
-		for ( Root root : getRoots() ) {
-			renderJoins( jpaqlQuery, renderingContext, root.getJoins() );
-			renderFetches( jpaqlQuery, renderingContext, root.getFetches() );
-		}
+		try {
+			jpaqlQuery.append( " from " );
+			String sep = "";
+			for ( Root root : getRoots() ) {
+				( (FromImplementor) root ).prepareAlias( renderingContext );
+				jpaqlQuery.append( sep );
+				sep = ", ";
+				jpaqlQuery.append( ( (FromImplementor) root ).renderTableExpression( renderingContext ) );
+			}
 
-		if ( isSubQuery ) {
-			if ( correlationRoots != null ) {
-				for ( FromImplementor<?,?> correlationRoot : correlationRoots ) {
-					final FromImplementor correlationParent = correlationRoot.getCorrelationParent();
-					correlationParent.prepareAlias( renderingContext );
-					final String correlationRootAlias = correlationParent.getAlias();
-					for ( Join<?,?> correlationJoin : correlationRoot.getJoins() ) {
-						final JoinImplementor correlationJoinImpl = (JoinImplementor) correlationJoin;
-						// IMPL NOTE: reuse the sep from above!
-						jpaqlQuery.append( sep );
-						correlationJoinImpl.prepareAlias( renderingContext );
-						jpaqlQuery.append( correlationRootAlias )
-								.append( '.' )
-								.append( correlationJoinImpl.getAttribute().getName() )
-								.append( " as " )
-								.append( correlationJoinImpl.getAlias() );
-						sep = ", ";
-						renderJoins( jpaqlQuery, renderingContext, correlationJoinImpl.getJoins() );
+			for ( Root root : getRoots() ) {
+				renderJoins( jpaqlQuery, renderingContext, root.getJoins() );
+				if ( root instanceof RootImpl ) {
+					Set<TreatedRoot> treats = ( (RootImpl) root ).getTreats();
+					for ( TreatedRoot treat : treats ) {
+						renderJoins( jpaqlQuery, renderingContext, treat.getJoins() );
+						renderFetches( jpaqlQuery, renderingContext, treat.getFetches() );
+					}
+				}
+				renderFetches( jpaqlQuery, renderingContext, root.getFetches() );
+			}
+
+			if ( isSubQuery ) {
+				if ( correlationRoots != null ) {
+					for ( FromImplementor<?, ?> correlationRoot : correlationRoots ) {
+						final FromImplementor correlationParent = correlationRoot.getCorrelationParent();
+						correlationParent.prepareAlias( renderingContext );
+						final String correlationRootAlias = correlationParent.getAlias();
+						for ( Join<?, ?> correlationJoin : correlationRoot.getJoins() ) {
+							final JoinImplementor correlationJoinImpl = (JoinImplementor) correlationJoin;
+							// IMPL NOTE: reuse the sep from above!
+							jpaqlQuery.append( sep );
+							correlationJoinImpl.prepareAlias( renderingContext );
+							jpaqlQuery.append( correlationRootAlias )
+									.append( '.' )
+									.append( correlationJoinImpl.getAttribute().getName() )
+									.append( " as " )
+									.append( correlationJoinImpl.getAlias() );
+							sep = ", ";
+							renderJoins( jpaqlQuery, renderingContext, correlationJoinImpl.getJoins() );
+						}
 					}
 				}
 			}
+		}
+		finally {
+			renderingContext.getClauseStack().pop();
+		}
+	}
+
+	protected void renderWhereClause(StringBuilder jpaqlQuery, RenderingContext renderingContext) {
+		if ( getRestriction() == null ) {
+			return;
+		}
+
+		renderingContext.getClauseStack().push( Clause.WHERE );
+		try {
+			jpaqlQuery.append( " where " )
+					.append( ( (Renderable) getRestriction() ).render( renderingContext ) );
+		}
+		finally {
+			renderingContext.getClauseStack().pop();
+		}
+	}
+
+	protected void renderGroupByClause(StringBuilder jpaqlQuery, RenderingContext renderingContext) {
+		if ( getGroupings().isEmpty() ) {
+			return;
+		}
+
+		renderingContext.getClauseStack().push( Clause.GROUP );
+		try {
+			jpaqlQuery.append( " group by " );
+			String sep = "";
+			for ( Expression grouping : getGroupings() ) {
+				jpaqlQuery.append( sep )
+						.append( ( (Renderable) grouping ).render( renderingContext ) );
+				sep = ", ";
+			}
+
+			renderHavingClause( jpaqlQuery, renderingContext );
+		}
+		finally {
+			renderingContext.getClauseStack().pop();
+		}
+	}
+
+	private void renderHavingClause(StringBuilder jpaqlQuery, RenderingContext renderingContext) {
+		if ( getHaving() == null ) {
+			return;
+		}
+
+		renderingContext.getClauseStack().push( Clause.HAVING );
+		try {
+			jpaqlQuery.append( " having " ).append( ( (Renderable) getHaving() ).render( renderingContext ) );
+		}
+		finally {
+			renderingContext.getClauseStack().pop();
 		}
 	}
 
@@ -336,13 +401,11 @@ public class QueryStructure<T> implements Serializable {
 		}
 
 		for ( Join join : joins ) {
-			if ( ((FromImplementor) join).shouldBeRendered() ) {
-				((FromImplementor) join).prepareAlias( renderingContext );
-				jpaqlQuery.append( renderJoinType( join.getJoinType() ) )
-						.append( ((FromImplementor) join).renderTableExpression( renderingContext ) );
-				renderJoins( jpaqlQuery, renderingContext, join.getJoins() );
-				renderFetches( jpaqlQuery, renderingContext, join.getFetches() );
-			}
+			( (FromImplementor) join ).prepareAlias( renderingContext );
+			jpaqlQuery.append( renderJoinType( join.getJoinType() ) )
+					.append( ( (FromImplementor) join ).renderTableExpression( renderingContext ) );
+			renderJoins( jpaqlQuery, renderingContext, join.getJoins() );
+			renderFetches( jpaqlQuery, renderingContext, join.getFetches() );
 		}
 	}
 

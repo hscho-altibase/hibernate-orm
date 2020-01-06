@@ -17,6 +17,7 @@ import org.hibernate.dialect.function.AvgWithArgumentCastFunction;
 import org.hibernate.dialect.function.NoArgSQLFunction;
 import org.hibernate.dialect.function.StandardSQLFunction;
 import org.hibernate.dialect.function.VarArgsSQLFunction;
+import org.hibernate.dialect.hint.IndexQueryHintHandler;
 import org.hibernate.dialect.identity.H2IdentityColumnSupport;
 import org.hibernate.dialect.identity.IdentityColumnSupport;
 import org.hibernate.dialect.pagination.AbstractLimitHandler;
@@ -36,7 +37,7 @@ import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.JdbcExceptionHelper;
 import org.hibernate.internal.util.ReflectHelper;
 import org.hibernate.tool.schema.extract.internal.SequenceInformationExtractorH2DatabaseImpl;
-import org.hibernate.tool.schema.extract.internal.SequenceInformationExtractorLegacyImpl;
+import org.hibernate.tool.schema.extract.internal.SequenceInformationExtractorNoOpImpl;
 import org.hibernate.tool.schema.extract.spi.SequenceInformationExtractor;
 import org.hibernate.type.StandardBasicTypes;
 
@@ -80,18 +81,15 @@ public class H2Dialect extends Dialect {
 	public H2Dialect() {
 		super();
 
-		String querySequenceString = "select sequence_name from information_schema.sequences";
-		SequenceInformationExtractor sequenceInformationExtractor = SequenceInformationExtractorH2DatabaseImpl.INSTANCE;
+		int buildId = Integer.MIN_VALUE;
+
 		try {
 			// HHH-2300
 			final Class h2ConstantsClass = ReflectHelper.classForName( "org.h2.engine.Constants" );
 			final int majorVersion = (Integer) h2ConstantsClass.getDeclaredField( "VERSION_MAJOR" ).get( null );
 			final int minorVersion = (Integer) h2ConstantsClass.getDeclaredField( "VERSION_MINOR" ).get( null );
-			final int buildId = (Integer) h2ConstantsClass.getDeclaredField( "BUILD_ID" ).get( null );
-			if ( buildId < 32 ) {
-				querySequenceString = "select name from information_schema.sequences";
-				sequenceInformationExtractor = SequenceInformationExtractorLegacyImpl.INSTANCE;
-			}
+			buildId = (Integer) h2ConstantsClass.getDeclaredField( "BUILD_ID" ).get( null );
+
 			if ( ! ( majorVersion > 1 || minorVersion > 2 || buildId >= 139 ) ) {
 				LOG.unsupportedMultiTableBulkHqlJpaql( majorVersion, minorVersion, buildId );
 			}
@@ -102,8 +100,14 @@ public class H2Dialect extends Dialect {
 			LOG.undeterminedH2Version();
 		}
 
-		this.querySequenceString = querySequenceString;
-		this.sequenceInformationExtractor = sequenceInformationExtractor;
+		if ( buildId >= 32 ) {
+			this.sequenceInformationExtractor = SequenceInformationExtractorH2DatabaseImpl.INSTANCE;
+			this.querySequenceString = "select * from INFORMATION_SCHEMA.SEQUENCES";
+		}
+		else {
+			this.sequenceInformationExtractor = SequenceInformationExtractorNoOpImpl.INSTANCE;
+			this.querySequenceString = null;
+		}
 
 		registerColumnType( Types.BOOLEAN, "boolean" );
 		registerColumnType( Types.BIGINT, "bigint" );
@@ -432,7 +436,7 @@ public class H2Dialect extends Dialect {
 	
 	@Override
 	public boolean dropConstraints() {
-		// We don't need to drop constraints beforeQuery dropping tables, that just leads to error
+		// We don't need to drop constraints before dropping tables, that just leads to error
 		// messages about missing tables when we don't have a schema in the database
 		return false;
 	}
@@ -441,4 +445,15 @@ public class H2Dialect extends Dialect {
 	public IdentityColumnSupport getIdentityColumnSupport() {
 		return new H2IdentityColumnSupport();
 	}
+
+	@Override
+	public String getQueryHintString(String query, String hints) {
+		return IndexQueryHintHandler.INSTANCE.addQueryHints( query, hints );
+	}
+
+	@Override
+	public boolean supportsSelectAliasInGroupByClause() {
+		return true;
+	}
+
 }

@@ -10,9 +10,9 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.Objects;
 
 import org.hibernate.AssertionFailure;
-import org.hibernate.internal.util.compare.EqualsHelper;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.pretty.MessageHelper;
 
@@ -74,6 +74,10 @@ public final class EntityKey implements Serializable {
 		return persister.getEntityName();
 	}
 
+	public EntityPersister getPersister() {
+		return persister;
+	}
+
 	@Override
 	public boolean equals(Object other) {
 		if ( this == other ) {
@@ -98,7 +102,7 @@ public final class EntityKey implements Serializable {
 			return true;
 		}
 		else {
-			return EqualsHelper.equals( otherKey.persister.getRootEntityName(), persister.getRootEntityName() );
+			return Objects.equals( otherKey.persister.getRootEntityName(), persister.getRootEntityName() );
 		}
 	}
 

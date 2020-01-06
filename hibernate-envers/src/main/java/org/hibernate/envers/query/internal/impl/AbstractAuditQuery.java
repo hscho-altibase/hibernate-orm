@@ -21,6 +21,8 @@ import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
 import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.exception.AuditException;
+import org.hibernate.envers.exception.NotAuditedException;
+import org.hibernate.envers.internal.entities.EntityConfiguration;
 import org.hibernate.envers.internal.entities.EntityInstantiator;
 import org.hibernate.envers.internal.reader.AuditReaderImplementor;
 import org.hibernate.envers.internal.tools.query.QueryBuilder;
@@ -79,9 +81,12 @@ public abstract class AbstractAuditQuery implements AuditQueryImplementor {
 		entityClassName = cls.getName();
 		this.entityName = entityName;
 		versionsEntityName = enversService.getAuditEntitiesConfiguration().getAuditEntityName( entityName );
+		if ( !enversService.getEntitiesConfigurations().isVersioned( entityName ) ) {
+			throw new NotAuditedException( entityName, "Entity [" + entityName + "] is not versioned" );
+		}
 		aliasToEntityNameMap.put( REFERENCED_ENTITY_ALIAS, entityName );
 
-		qb = new QueryBuilder( versionsEntityName, REFERENCED_ENTITY_ALIAS );
+		qb = new QueryBuilder( versionsEntityName, REFERENCED_ENTITY_ALIAS, versionsReader.getSessionImplementor().getFactory() );
 	}
 
 	@Override
@@ -90,7 +95,7 @@ public abstract class AbstractAuditQuery implements AuditQueryImplementor {
 	}
 	
 	protected Query buildQuery() {
-		Query query = qb.toQuery( versionsReader.getSession() );
+		Query query = qb.toQuery( versionsReader.getSessionImplementor() );
 		setQueryProperties( query );
 		return query;
 	}
@@ -336,5 +341,14 @@ public abstract class AbstractAuditQuery implements AuditQueryImplementor {
 			entityInstantiator.addInstancesFromVersionsEntities( entityName, result, queryResult, revision );
 		}
 		return result;
+	}
+
+	protected EntityConfiguration getEntityConfiguration() {
+		return enversService.getEntitiesConfigurations().get( entityName );
+	}
+
+	protected String getEntityName() {
+		// todo: can this be replaced by a call to getEntittyConfiguration#getEntityClassName()?
+		return entityName;
 	}
 }

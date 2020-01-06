@@ -15,9 +15,15 @@ import java.util.List;
 import java.util.Map;
 
 import org.hibernate.engine.internal.TwoPhaseLoad;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.event.service.spi.EventListenerGroup;
+import org.hibernate.event.service.spi.EventListenerRegistry;
 import org.hibernate.event.spi.EventSource;
+import org.hibernate.event.spi.EventType;
 import org.hibernate.event.spi.PostLoadEvent;
+import org.hibernate.event.spi.PostLoadEventListener;
 import org.hibernate.event.spi.PreLoadEvent;
+import org.hibernate.event.spi.PreLoadEventListener;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.util.collections.CollectionHelper;
 import org.hibernate.loader.plan.exec.process.spi.CollectionReferenceInitializer;
@@ -110,7 +116,7 @@ public abstract class AbstractRowReader implements RowReader {
 		Object logicalRow = readLogicalRow( resultSet, context );
 
 
-		// 4) allow arrays, entities and collections afterQuery row callbacks
+		// 4) allow arrays, entities and collections after row callbacks
 		if ( hasEntityReferenceInitializers ) {
 			for ( EntityReferenceInitializer entityReferenceInitializer : entityReferenceInitializers ) {
 				entityReferenceInitializer.finishUpRow( resultSet, context );
@@ -188,7 +194,7 @@ public abstract class AbstractRowReader implements RowReader {
 	public void finishUp(ResultSetProcessingContextImpl context, List<AfterLoadAction> afterLoadActionList) {
 		final List<HydratedEntityRegistration> hydratedEntityRegistrations = context.getHydratedEntityRegistrationList();
 
-		// for arrays, we should end the collection load beforeQuery resolving the entities, since the
+		// for arrays, we should end the collection load before resolving the entities, since the
 		// actual array instances are not instantiated during loading
 		finishLoadingArrays( context );
 
@@ -211,6 +217,9 @@ public abstract class AbstractRowReader implements RowReader {
 		// now we can finalize loading collections
 		finishLoadingCollections( context );
 
+		// and trigger the afterInitialize() hooks
+		afterInitialize( context, hydratedEntityRegistrations );
+
 		// finally, perform post-load operations
 		postLoad( postLoadEvent, context, hydratedEntityRegistrations, afterLoadActionList );
 	}
@@ -230,16 +239,25 @@ public abstract class AbstractRowReader implements RowReader {
 				: hydratedEntityRegistrations.size();
 		log.tracev( "Total objects hydrated: {0}", numberOfHydratedObjects );
 
-		if ( hydratedEntityRegistrations == null ) {
+		if ( numberOfHydratedObjects == 0 ) {
 			return;
 		}
+
+		final SharedSessionContractImplementor session = context.getSession();
+		final Iterable<PreLoadEventListener> listeners = session
+			.getFactory()
+			.getServiceRegistry()
+			.getService( EventListenerRegistry.class )
+			.getEventListenerGroup( EventType.PRE_LOAD )
+			.listeners();
 
 		for ( HydratedEntityRegistration registration : hydratedEntityRegistrations ) {
 			TwoPhaseLoad.initializeEntity(
 					registration.getInstance(),
 					context.isReadOnly(),
-					context.getSession(),
-					preLoadEvent
+					session,
+					preLoadEvent,
+					listeners
 			);
 		}
 	}
@@ -250,25 +268,49 @@ public abstract class AbstractRowReader implements RowReader {
 		}
 	}
 
+	private void afterInitialize(ResultSetProcessingContextImpl context,
+			List<HydratedEntityRegistration> hydratedEntityRegistrations) {
+		if ( hydratedEntityRegistrations == null ) {
+			return;
+		}
+
+		for ( HydratedEntityRegistration registration : hydratedEntityRegistrations ) {
+			TwoPhaseLoad.afterInitialize( registration.getInstance(), context.getSession() );
+		}
+	}
+
 	private void postLoad(
 			PostLoadEvent postLoadEvent,
 			ResultSetProcessingContextImpl context,
 			List<HydratedEntityRegistration> hydratedEntityRegistrations,
 			List<AfterLoadAction> afterLoadActionList) {
 		// Until this entire method is refactored w/ polymorphism, postLoad was
-		// split off from initializeEntity.  It *must* occur afterQuery
+		// split off from initializeEntity.  It *must* occur after
 		// endCollectionLoad to ensure the collection is in the
 		// persistence context.
 		if ( hydratedEntityRegistrations == null ) {
 			return;
 		}
 
+		final SharedSessionContractImplementor session = context.getSession();
+		final Iterable<PostLoadEventListener> postLoadEventListeners;
+		if ( session.isEventSource() ) {
+			final EventListenerGroup<PostLoadEventListener> listenerGroup = session.getFactory()
+				.getServiceRegistry()
+				.getService( EventListenerRegistry.class )
+				.getEventListenerGroup( EventType.POST_LOAD );
+			postLoadEventListeners = listenerGroup.listeners();
+		}
+		else {
+			postLoadEventListeners = Collections.emptyList();
+		}
+
 		for ( HydratedEntityRegistration registration : hydratedEntityRegistrations ) {
-			TwoPhaseLoad.postLoad( registration.getInstance(), context.getSession(), postLoadEvent );
+			TwoPhaseLoad.postLoad( registration.getInstance(), session, postLoadEvent, postLoadEventListeners );
 			if ( afterLoadActionList != null ) {
 				for ( AfterLoadAction afterLoadAction : afterLoadActionList ) {
 					afterLoadAction.afterLoad(
-							context.getSession(),
+							session,
 							registration.getInstance(),
 							(Loadable) registration.getEntityReference().getEntityPersister()
 					);

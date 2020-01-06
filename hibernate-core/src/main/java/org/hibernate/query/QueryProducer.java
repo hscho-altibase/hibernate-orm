@@ -6,6 +6,12 @@
  */
 package org.hibernate.query;
 
+import org.hibernate.SQLQuery;
+
+import javax.persistence.criteria.CriteriaDelete;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.CriteriaUpdate;
+
 /**
  * Contract for things that can produce Query instances.  Expected implementors include
  * Session and StatelessSession.
@@ -27,7 +33,7 @@ public interface QueryProducer {
 	 * defined with the given name or if the query string is
 	 * found to be invalid
 	 */
-	Query getNamedQuery(String queryName);
+	org.hibernate.Query getNamedQuery(String queryName);
 
 	/**
 	 * Create a {@link Query} instance for the given HQL/JPQL query string.
@@ -38,7 +44,7 @@ public interface QueryProducer {
 	 *
 	 * @see javax.persistence.EntityManager#createQuery(String)
 	 */
-	Query createQuery(String queryString);
+	org.hibernate.Query createQuery(String queryString);
 
 	/**
 	 * Create a typed {@link Query} instance for the given HQL/JPQL query string.
@@ -95,7 +101,7 @@ public interface QueryProducer {
 	 * @deprecated (since 5.2) use {@link #createNativeQuery(String)} instead
 	 */
 	@Deprecated
-	default NativeQuery createSQLQuery(String queryString) {
+	default SQLQuery createSQLQuery(String queryString) {
 		NativeQuery query = createNativeQuery( queryString );
 		query.setComment( "dynamic native SQL query" );
 		return query;
@@ -149,7 +155,7 @@ public interface QueryProducer {
 	 * @deprecated (since 5.2) use {@link #getNamedNativeQuery(String)} instead
 	 */
 	@Deprecated
-	default NativeQuery getNamedSQLQuery(String name) {
+	default org.hibernate.Query getNamedSQLQuery(String name) {
 		return getNamedNativeQuery( name );
 	}
 
@@ -161,4 +167,10 @@ public interface QueryProducer {
 	 * @return The NativeQuery instance for manipulation and execution
 	 */
 	NativeQuery getNamedNativeQuery(String name);
+
+	<T> Query<T> createQuery(CriteriaQuery<T> criteriaQuery);
+
+	Query createQuery(CriteriaUpdate updateQuery);
+
+	Query createQuery(CriteriaDelete deleteQuery);
 }

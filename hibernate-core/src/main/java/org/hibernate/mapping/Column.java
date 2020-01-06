@@ -15,7 +15,10 @@ import org.hibernate.dialect.Dialect;
 import org.hibernate.dialect.function.SQLFunctionRegistry;
 import org.hibernate.engine.spi.Mapping;
 import org.hibernate.internal.util.StringHelper;
+import org.hibernate.loader.internal.AliasConstantsHelper;
 import org.hibernate.sql.Template;
+
+import static org.hibernate.internal.util.StringHelper.safeInterning;
 
 /**
  * A column of a relational database table
@@ -90,21 +93,25 @@ public class Column implements Selectable, Serializable, Cloneable {
 	 * returns quoted name as it would be in the mapping file.
 	 */
 	public String getQuotedName() {
-		return quoted ?
+		return safeInterning(
+				quoted ?
 				"`" + name + "`" :
-				name;
+				name
+		);
 	}
 
 	public String getQuotedName(Dialect d) {
-		return quoted ?
+		return safeInterning(
+				quoted ?
 				d.openQuote() + name + d.closeQuote() :
-				name;
+				name
+		);
 	}
 
 	@Override
 	public String getAlias(Dialect dialect) {
 		final int lastLetter = StringHelper.lastIndexOfLetter( name );
-		final String suffix = Integer.toString( uniqueInteger ) + '_';
+		final String suffix = AliasConstantsHelper.get( uniqueInteger );
 
 		String alias = name;
 		if ( lastLetter == -1 ) {
@@ -137,7 +144,7 @@ public class Column implements Selectable, Serializable, Cloneable {
 	 */
 	@Override
 	public String getAlias(Dialect dialect, Table table) {
-		return getAlias( dialect ) + table.getUniqueInteger() + '_';
+		return safeInterning( getAlias( dialect ) + AliasConstantsHelper.get( table.getUniqueInteger() ) );
 	}
 
 	public boolean isNullable() {
@@ -268,13 +275,16 @@ public class Column implements Selectable, Serializable, Cloneable {
 
 	@Override
 	public String getTemplate(Dialect dialect, SQLFunctionRegistry functionRegistry) {
-		return hasCustomRead()
-				? Template.renderWhereStringTemplate( customRead, dialect, functionRegistry )
-				: Template.TEMPLATE + '.' + getQuotedName( dialect );
+		return safeInterning(
+				hasCustomRead()
+				// see note in renderTransformerReadFragment wrt access to SessionFactory
+				? Template.renderTransformerReadFragment( customRead, getQuotedName( dialect ) )
+				: Template.TEMPLATE + '.' + getQuotedName( dialect )
+		);
 	}
 
 	public boolean hasCustomRead() {
-		return ( customRead != null && customRead.length() > 0 );
+		return customRead != null;
 	}
 
 	public String getReadExpr(Dialect dialect) {
@@ -337,7 +347,7 @@ public class Column implements Selectable, Serializable, Cloneable {
 	}
 
 	public void setCustomWrite(String customWrite) {
-		this.customWrite = customWrite;
+		this.customWrite = safeInterning( customWrite );
 	}
 
 	public String getCustomRead() {
@@ -345,7 +355,7 @@ public class Column implements Selectable, Serializable, Cloneable {
 	}
 
 	public void setCustomRead(String customRead) {
-		this.customRead = customRead;
+		this.customRead = safeInterning( StringHelper.nullIfEmpty( customRead ) );
 	}
 
 	public String getCanonicalName() {

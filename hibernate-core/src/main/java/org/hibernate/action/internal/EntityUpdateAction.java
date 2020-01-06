@@ -11,12 +11,13 @@ import java.io.Serializable;
 import org.hibernate.AssertionFailure;
 import org.hibernate.HibernateException;
 import org.hibernate.cache.CacheException;
-import org.hibernate.cache.spi.access.EntityRegionAccessStrategy;
+import org.hibernate.cache.spi.access.EntityDataAccess;
 import org.hibernate.cache.spi.access.SoftLock;
 import org.hibernate.cache.spi.entry.CacheEntry;
 import org.hibernate.engine.internal.Versioning;
 import org.hibernate.engine.spi.CachedNaturalIdValueSource;
 import org.hibernate.engine.spi.EntityEntry;
+import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.engine.spi.SessionEventListenerManager;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
@@ -29,6 +30,8 @@ import org.hibernate.event.spi.PostUpdateEventListener;
 import org.hibernate.event.spi.PreUpdateEvent;
 import org.hibernate.event.spi.PreUpdateEventListener;
 import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.stat.internal.StatsHelper;
+import org.hibernate.stat.spi.StatisticsImplementor;
 import org.hibernate.type.TypeHelper;
 
 /**
@@ -83,7 +86,7 @@ public final class EntityUpdateAction extends EntityAction {
 		this.rowId = rowId;
 
 		this.previousNaturalIdValues = determinePreviousNaturalIdValues( persister, previousState, session, id );
-		session.getPersistenceContext().getNaturalIdHelper().manageLocalNaturalIdCrossReference(
+		session.getPersistenceContextInternal().getNaturalIdHelper().manageLocalNaturalIdCrossReference(
 				persister,
 				id,
 				state,
@@ -101,11 +104,12 @@ public final class EntityUpdateAction extends EntityAction {
 			return null;
 		}
 
+		final PersistenceContext persistenceContext = session.getPersistenceContextInternal();
 		if ( previousState != null ) {
-			return session.getPersistenceContext().getNaturalIdHelper().extractNaturalIdValues( previousState, persister );
+			return persistenceContext.getNaturalIdHelper().extractNaturalIdValues( previousState, persister );
 		}
 
-		return session.getPersistenceContext().getNaturalIdSnapshot( id, persister );
+		return persistenceContext.getNaturalIdSnapshot( id, persister );
 	}
 
 	@Override
@@ -127,8 +131,8 @@ public final class EntityUpdateAction extends EntityAction {
 		}
 		
 		final Object ck;
-		if ( persister.hasCache() ) {
-			final EntityRegionAccessStrategy cache = persister.getCacheAccessStrategy();
+		if ( persister.canWriteToCache() ) {
+			final EntityDataAccess cache = persister.getCacheAccessStrategy();
 			ck = cache.generateCacheKey(
 					id, 
 					persister,
@@ -155,7 +159,7 @@ public final class EntityUpdateAction extends EntityAction {
 			);
 		}
 
-		final EntityEntry entry = session.getPersistenceContext().getEntry( instance );
+		final EntityEntry entry = session.getPersistenceContextInternal().getEntry( instance );
 		if ( entry == null ) {
 			throw new AssertionFailure( "possible nonthreadsafe access to session" );
 		}
@@ -184,23 +188,27 @@ public final class EntityUpdateAction extends EntityAction {
 			entry.postUpdate( instance, state, nextVersion );
 		}
 
-		if ( persister.hasCache() ) {
+		final StatisticsImplementor statistics = factory.getStatistics();
+		if ( persister.canWriteToCache() ) {
 			if ( persister.isCacheInvalidationRequired() || entry.getStatus()!= Status.MANAGED ) {
 				persister.getCacheAccessStrategy().remove( session, ck);
 			}
-			else {
+			else if ( session.getCacheMode().isPutEnabled() ) {
 				//TODO: inefficient if that cache is just going to ignore the updated state!
 				final CacheEntry ce = persister.buildCacheEntry( instance,state, nextVersion, getSession() );
 				cacheEntry = persister.getCacheEntryStructure().structure( ce );
 
 				final boolean put = cacheUpdate( persister, previousVersion, ck );
-				if ( put && factory.getStatistics().isStatisticsEnabled() ) {
-					factory.getStatistics().secondLevelCachePut( getPersister().getCacheAccessStrategy().getRegion().getName() );
+				if ( put && statistics.isStatisticsEnabled() ) {
+					statistics.entityCachePut(
+							StatsHelper.INSTANCE.getRootEntityRole( persister ),
+							getPersister().getCacheAccessStrategy().getRegion().getName()
+					);
 				}
 			}
 		}
 
-		session.getPersistenceContext().getNaturalIdHelper().manageSharedNaturalIdCrossReference(
+		session.getPersistenceContextInternal().getNaturalIdHelper().manageSharedNaturalIdCrossReference(
 				persister,
 				id,
 				state,
@@ -210,8 +218,8 @@ public final class EntityUpdateAction extends EntityAction {
 
 		postUpdate();
 
-		if ( factory.getStatistics().isStatisticsEnabled() && !veto ) {
-			factory.getStatistics().updateEntity( getPersister().getEntityName() );
+		if ( statistics.isStatisticsEnabled() && !veto ) {
+			statistics.updateEntity( getPersister().getEntityName() );
 		}
 	}
 
@@ -299,7 +307,7 @@ public final class EntityUpdateAction extends EntityAction {
 	protected boolean hasPostCommitEventListeners() {
 		final EventListenerGroup<PostUpdateEventListener> group = listenerGroup( EventType.POST_COMMIT_UPDATE );
 		for ( PostUpdateEventListener listener : group.listeners() ) {
-			if ( listener.requiresPostCommitHanding( getPersister() ) ) {
+			if ( listener.requiresPostCommitHandling( getPersister() ) ) {
 				return true;
 			}
 		}
@@ -310,31 +318,39 @@ public final class EntityUpdateAction extends EntityAction {
 	@Override
 	public void doAfterTransactionCompletion(boolean success, SharedSessionContractImplementor session) throws CacheException {
 		final EntityPersister persister = getPersister();
-		if ( persister.hasCache() ) {
-			final EntityRegionAccessStrategy cache = persister.getCacheAccessStrategy();
+		if ( persister.canWriteToCache() ) {
+			final EntityDataAccess cache = persister.getCacheAccessStrategy();
+			final SessionFactoryImplementor factory = session.getFactory();
 			final Object ck = cache.generateCacheKey(
 					getId(),
 					persister,
-					session.getFactory(),
+					factory,
 					session.getTenantIdentifier()
 					
 			);
 
-			if ( success && cacheEntry!=null /*!persister.isCacheInvalidationRequired()*/ ) {
+			if ( success &&
+					cacheEntry != null &&
+					!persister.isCacheInvalidationRequired() &&
+					session.getCacheMode().isPutEnabled() ) {
 				final boolean put = cacheAfterUpdate( cache, ck );
 
-				if ( put && getSession().getFactory().getStatistics().isStatisticsEnabled() ) {
-					getSession().getFactory().getStatistics().secondLevelCachePut( cache.getRegion().getName() );
+				final StatisticsImplementor statistics = factory.getStatistics();
+				if ( put && statistics.isStatisticsEnabled() ) {
+					statistics.entityCachePut(
+							StatsHelper.INSTANCE.getRootEntityRole( persister ),
+							cache.getRegion().getName()
+					);
 				}
 			}
 			else {
-				cache.unlockItem(session, ck, lock );
+				cache.unlockItem( session, ck, lock );
 			}
 		}
 		postCommitUpdate( success );
 	}
 
-	private boolean cacheAfterUpdate(EntityRegionAccessStrategy cache, Object ck) {
+	private boolean cacheAfterUpdate(EntityDataAccess cache, Object ck) {
 		final SharedSessionContractImplementor session = getSession();
 		SessionEventListenerManager eventListenerManager = session.getEventListenerManager();
 		try {

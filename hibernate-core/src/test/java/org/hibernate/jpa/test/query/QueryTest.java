@@ -23,10 +23,12 @@ import javax.persistence.TemporalType;
 import javax.persistence.Tuple;
 
 import org.hibernate.Hibernate;
+import org.hibernate.QueryException;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.dialect.Oracle8iDialect;
 import org.hibernate.dialect.PostgreSQL9Dialect;
 import org.hibernate.dialect.PostgresPlusDialect;
+import org.hibernate.dialect.SybaseDialect;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
 import org.hibernate.jpa.test.Distributor;
@@ -41,6 +43,7 @@ import junit.framework.Assert;
 
 import static junit.framework.Assert.assertNull;
 import static org.hibernate.testing.junit4.ExtraAssertions.assertTyping;
+import static org.hibernate.testing.transaction.TransactionUtil.doInJPA;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -131,23 +134,24 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value = SybaseDialect.class, comment = "Null == null on Sybase")
 	public void testNullPositionalParameter() throws Exception {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
 		try {
 			Item item = new Item( "Mouse", "Micro$oft mouse" );
 			em.persist( item );
-			Query q = em.createQuery( "from Item i where i.intVal=?" );
-			q.setParameter( 0, null );
+			Query q = em.createQuery( "from Item i where i.intVal=?1" );
+			q.setParameter( 1, null );
 			List results = q.getResultList();
 			// null != null
 			assertEquals( 0, results.size() );
-			q = em.createQuery( "from Item i where i.intVal is null and ? is null" );
-			q.setParameter( 0, null );
+			q = em.createQuery( "from Item i where i.intVal is null and ?1 is null" );
+			q.setParameter( 1, null );
 			results = q.getResultList();
 			assertEquals( 1, results.size() );
-			q = em.createQuery( "from Item i where i.intVal is null or i.intVal = ?" );
-			q.setParameter( 0, null );
+			q = em.createQuery( "from Item i where i.intVal is null or i.intVal = ?1" );
+			q.setParameter( 1, null );
 			results = q.getResultList();
 			assertEquals( 1, results.size() );
 		}
@@ -160,13 +164,14 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value = SybaseDialect.class, comment = "Null == null on Sybase")
 	public void testNullPositionalParameterParameter() throws Exception {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
 		try {
 			Item item = new Item( "Mouse", "Micro$oft mouse" );
 			em.persist( item );
-			Query q = em.createQuery( "from Item i where i.intVal=?" );
+			Query q = em.createQuery( "from Item i where i.intVal=?1" );
 			Parameter p = new Parameter() {
 				@Override
 				public String getName() {
@@ -175,7 +180,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 
 				@Override
 				public Integer getPosition() {
-					return 0;
+					return 1;
 				}
 
 				@Override
@@ -188,11 +193,11 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 			List results = q.getResultList();
 			// null != null
 			assertEquals( 0, results.size() );
-			q = em.createQuery( "from Item i where i.intVal is null and ? is null" );
+			q = em.createQuery( "from Item i where i.intVal is null and ?1 is null" );
 			q.setParameter( p, null );
 			results = q.getResultList();
 			assertEquals( 1, results.size() );
-			q = em.createQuery( "from Item i where i.intVal is null or i.intVal = ?" );
+			q = em.createQuery( "from Item i where i.intVal is null or i.intVal = ?1" );
 			q.setParameter( p, null );
 			results = q.getResultList();
 			assertEquals( 1, results.size() );
@@ -206,13 +211,14 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value = SybaseDialect.class, comment = "Null == null on Sybase")
 	public void testNullPositionalParameterParameterIncompatible() throws Exception {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
 		try {
 			Item item = new Item( "Mouse", "Micro$oft mouse" );
 			em.persist( item );
-			Query q = em.createQuery( "from Item i where i.intVal=?" );
+			Query q = em.createQuery( "from Item i where i.intVal=?1" );
 			Parameter p = new Parameter() {
 				@Override
 				public String getName() {
@@ -221,7 +227,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 
 				@Override
 				public Integer getPosition() {
-					return 0;
+					return 1;
 				}
 
 				@Override
@@ -234,11 +240,11 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 			List results = q.getResultList();
 			// null != null
 			assertEquals( 0, results.size() );
-			q = em.createQuery( "from Item i where i.intVal is null and ? is null" );
+			q = em.createQuery( "from Item i where i.intVal is null and ?1 is null" );
 			q.setParameter( p, null );
 			results = q.getResultList();
 			assertEquals( 1, results.size() );
-			q = em.createQuery( "from Item i where i.intVal is null or i.intVal = ?" );
+			q = em.createQuery( "from Item i where i.intVal is null or i.intVal = ?1" );
 			q.setParameter( p, null );
 			results = q.getResultList();
 			assertEquals( 1, results.size() );
@@ -252,6 +258,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value = SybaseDialect.class, comment = "Null == null on Sybase")
 	public void testNullNamedParameter() throws Exception {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
@@ -281,6 +288,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value = SybaseDialect.class, comment = "Null == null on Sybase")
 	public void testNullNamedParameterParameter() throws Exception {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
@@ -326,6 +334,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value = SybaseDialect.class, comment = "Null == null on Sybase")
 	public void testNullNamedParameterParameterIncompatible() throws Exception {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
@@ -374,6 +383,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 	@SkipForDialect(value = Oracle8iDialect.class, jiraKey = "HHH-10161", comment = "Cannot convert untyped null (assumed to be BINARY type) to NUMBER")
 	@SkipForDialect(value = PostgreSQL9Dialect.class, jiraKey = "HHH-10312", comment = "Cannot convert untyped null (assumed to be bytea type) to bigint")
 	@SkipForDialect(value = PostgresPlusDialect.class, jiraKey = "HHH-10312", comment = "Cannot convert untyped null (assumed to be bytea type) to bigint")
+	@SkipForDialect(value = SybaseDialect.class, comment = "Null == null on Sybase")
 	public void testNativeQueryNullPositionalParameter() throws Exception {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
@@ -409,6 +419,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 	@SkipForDialect(value = PostgreSQL9Dialect.class, jiraKey = "HHH-10312", comment = "Cannot convert untyped null (assumed to be bytea type) to bigint")
 	@SkipForDialect(value = PostgresPlusDialect.class, jiraKey = "HHH-10312", comment = "Cannot convert untyped null (assumed to be bytea type) to bigint")
 	@SkipForDialect(value = Oracle8iDialect.class, comment = "ORA-00932: inconsistent datatypes: expected NUMBER got BINARY")
+	@SkipForDialect(value = SybaseDialect.class, comment = "Null == null on Sybase")
 	public void testNativeQueryNullPositionalParameterParameter() throws Exception {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
@@ -460,6 +471,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 	@SkipForDialect(value = Oracle8iDialect.class, jiraKey = "HHH-10161", comment = "Cannot convert untyped null (assumed to be BINARY type) to NUMBER")
 	@SkipForDialect(value = PostgreSQL9Dialect.class, jiraKey = "HHH-10312", comment = "Cannot convert untyped null (assumed to be bytea type) to bigint")
 	@SkipForDialect(value = PostgresPlusDialect.class, jiraKey = "HHH-10312", comment = "Cannot convert untyped null (assumed to be bytea type) to bigint")
+	@SkipForDialect(value = SybaseDialect.class, comment = "Null == null on Sybase")
 	public void testNativeQueryNullNamedParameter() throws Exception {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
@@ -495,6 +507,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 	@SkipForDialect(value = PostgreSQL9Dialect.class, jiraKey = "HHH-10312", comment = "Cannot convert untyped null (assumed to be bytea type) to bigint")
 	@SkipForDialect(value = PostgresPlusDialect.class, jiraKey = "HHH-10312", comment = "Cannot convert untyped null (assumed to be bytea type) to bigint")
 	@SkipForDialect(value = Oracle8iDialect.class, comment = "ORA-00932: inconsistent datatypes: expected NUMBER got BINARY")
+	@SkipForDialect(value = SybaseDialect.class, comment = "Null == null on Sybase")
 	public void testNativeQueryNullNamedParameterParameter() throws Exception {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
@@ -677,9 +690,8 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 			Query query = em.createQuery( "from Item item where item.name =?1 or item.descr = ?1" );
 			Parameter p1 = query.getParameter( 1 );
 			Assert.assertNotNull( p1 );
-			// in 5.2, '?<position' parameters are named while '?' are position-based.
-			Assert.assertNotNull( p1.getName() );
-			Assert.assertNull( p1.getPosition() );
+			Assert.assertNotNull( p1.getPosition() );
+			Assert.assertNull( p1.getName() );
 
 			em.getTransaction().commit();
 		}
@@ -692,6 +704,83 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 		finally {
 			em.close();
 		}
+	}
+
+	@Test
+	@TestForIssue(jiraKey = "HHH-12290")
+	public void testParameterCollectionAndPositional() {
+		final Item item = new Item( "Mouse", "Microsoft mouse" );
+		final Item item2 = new Item( "Computer", "Dell computer" );
+
+		doInJPA( this::entityManagerFactory, entityManager -> {
+			entityManager.persist( item );
+			entityManager.persist( item2 );
+			assertTrue( entityManager.contains( item ) );
+		} );
+
+		doInJPA( this::entityManagerFactory, entityManager -> {
+			Query q = entityManager.createQuery( "select item from Item item where item.name in ?1 and item.descr = ?2" );
+			List params = new ArrayList();
+			params.add( item.getName() );
+			params.add( item2.getName() );
+			q.setParameter( 1, params );
+			q.setParameter( 2, item2.getDescr() );
+			List result = q.getResultList();
+			assertNotNull( result );
+			assertEquals( 1, result.size() );
+		} );
+
+	}
+
+	@Test
+	@TestForIssue(jiraKey = "HHH-12290")
+	public void testParameterCollectionParenthesesAndPositional() {
+		final Item item = new Item( "Mouse", "Microsoft mouse" );
+		final Item item2 = new Item( "Computer", "Dell computer" );
+
+		doInJPA( this::entityManagerFactory, entityManager -> {
+			entityManager.persist( item );
+			entityManager.persist( item2 );
+			assertTrue( entityManager.contains( item ) );
+		} );
+
+		doInJPA( this::entityManagerFactory, entityManager -> {
+			Query q = entityManager.createQuery(
+					"select item from Item item where item.name in (?1) and item.descr = ?2" );
+			List params = new ArrayList();
+			params.add( item.getName() );
+			params.add( item2.getName() );
+			q.setParameter( 1, params );
+			q.setParameter( 2, item2.getDescr() );
+			List result = q.getResultList();
+			assertNotNull( result );
+			assertEquals( 1, result.size() );
+		} );
+	}
+
+	@Test
+	@TestForIssue(jiraKey = "HHH-12290")
+	public void testParameterCollectionSingletonParenthesesAndPositional() {
+		final Item item = new Item( "Mouse", "Microsoft mouse" );
+		final Item item2 = new Item( "Computer", "Dell computer" );
+
+		doInJPA( this::entityManagerFactory, entityManager -> {
+			entityManager.persist( item );
+			entityManager.persist( item2 );
+			assertTrue( entityManager.contains( item ) );
+		} );
+
+		doInJPA( this::entityManagerFactory, entityManager -> {
+			Query q = entityManager.createQuery(
+					"select item from Item item where item.name in (?1) and item.descr = ?2" );
+			List params = new ArrayList();
+			params.add( item2.getName() );
+			q.setParameter( 1, params );
+			q.setParameter( 2, item2.getDescr() );
+			List result = q.getResultList();
+			assertNotNull( result );
+			assertEquals( 1, result.size() );
+		} );
 	}
 
 	@Test
@@ -734,7 +823,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 			params.add( item.getName() );
 			params.add( item2.getName() );
 			// deprecated usage of positional parameter by String
-			q.setParameter( "1", params );
+			q.setParameter( 1, params );
 			result = q.getResultList();
 			assertNotNull( result );
 			assertEquals( 2, result.size() );
@@ -796,7 +885,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 			params.add( item.getName() );
 			params.add( item2.getName() );
 			// deprecated usage of positional parameter by String
-			q.setParameter( "1", params );
+			q.setParameter( 1, params );
 			result = q.getResultList();
 			assertNotNull( result );
 			assertEquals( 2, result.size() );
@@ -1000,13 +1089,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 			// next using jpa-style positional parameter, but as a name (which is how Hibernate core treats these
 			query = em.createQuery( "select w from Wallet w where w.brand = ?1" );
 			// deprecated usage of positional parameter by String
-			query.setParameter( "1", "Lacoste" );
-			w = (Wallet) query.getSingleResult();
-			assertNotNull( w );
-
-			// finally using hql-style positional parameter
-			query = em.createQuery( "select w from Wallet w where w.brand = ?" );
-			query.setParameter( 0, "Lacoste" );
+			query.setParameter( 1, "Lacoste" );
 			w = (Wallet) query.getSingleResult();
 			assertNotNull( w );
 
@@ -1036,8 +1119,19 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 			em.persist( w );
 			em.flush();
 
-			// using jpa-style, position index should match syntax '?<position'.
-			Query jpaQuery = em.createQuery( "select w from Wallet w where w.brand = ?1 and w.model = ?3" );
+			// Gaps are not allowed
+			try {
+				Query jpaQuery = em.createQuery( "select w from Wallet w where w.brand = ?1 and w.model = ?3" );
+				fail( "expecting error regarding gap in positional param labels" );
+			}
+			catch ( IllegalArgumentException e ) {
+				assertNotNull( e.getCause() );
+				assertTyping( QueryException.class, e.getCause() );
+				assertTrue( e.getCause().getMessage().contains( "gap" ) );
+			}
+
+			// using jpa-style, position index should match syntax '?<position>'.
+			Query jpaQuery = em.createQuery( "select w from Wallet w where w.brand = ?1" );
 			jpaQuery.setParameter( 1, "Lacoste" );
 			try {
 				jpaQuery.setParameter( 2, "Expensive" );
@@ -1062,17 +1156,6 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 			try {
 				Parameter<Integer> parameter = jpaQuery.getParameter( 1, Integer.class );
 				fail( "Should fail due to user error in parameters" );
-			}
-			catch (Exception e) {
-				assertTyping( IllegalArgumentException.class, e );
-			}
-
-			// using hql-style, should be 0-based
-			Query hqlQuery = em.createQuery( "select w from Wallet w where w.brand = ? and w.model = ?" );
-			try {
-				hqlQuery.setParameter( 1, "Lacoste" );
-				hqlQuery.setParameter( 2, "Expensive" );
-				fail( "Should fail due to a user error in parameters" );
 			}
 			catch (Exception e) {
 				assertTyping( IllegalArgumentException.class, e );

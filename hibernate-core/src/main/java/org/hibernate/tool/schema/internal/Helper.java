@@ -17,11 +17,13 @@ import org.hibernate.boot.model.relational.Namespace;
 import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.engine.jdbc.env.spi.JdbcEnvironment;
+import org.hibernate.internal.CoreLogging;
+import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.config.ConfigurationHelper;
+import org.hibernate.resource.transaction.spi.DdlTransactionIsolator;
 import org.hibernate.service.ServiceRegistry;
 import org.hibernate.tool.schema.extract.spi.DatabaseInformation;
-import org.hibernate.tool.schema.internal.exec.ImprovedDatabaseInformationImpl;
-import org.hibernate.tool.schema.internal.exec.JdbcConnectionContext;
+import org.hibernate.tool.schema.extract.internal.DatabaseInformationImpl;
 import org.hibernate.tool.schema.internal.exec.ScriptSourceInputFromFile;
 import org.hibernate.tool.schema.internal.exec.ScriptSourceInputFromReader;
 import org.hibernate.tool.schema.internal.exec.ScriptSourceInputFromUrl;
@@ -39,9 +41,13 @@ import org.jboss.logging.Logger;
  * @author Steve Ebersole
  */
 public class Helper {
-	private static final Logger log = Logger.getLogger( Helper.class );
 
-	public static ScriptSourceInput interpretScriptSourceSetting(Object scriptSourceSetting, ClassLoaderService classLoaderService) {
+	private static final CoreMessageLogger log = CoreLogging.messageLogger( Helper.class );
+
+	public static ScriptSourceInput interpretScriptSourceSetting(
+			Object scriptSourceSetting,
+			ClassLoaderService classLoaderService,
+			String charsetName ) {
 		if ( Reader.class.isInstance( scriptSourceSetting ) ) {
 			return new ScriptSourceInputFromReader( (Reader) scriptSourceSetting );
 		}
@@ -58,16 +64,19 @@ public class Helper {
 			// ClassLoaderService.locateResource() first tries the given resource name as url form...
 			final URL url = classLoaderService.locateResource( scriptSourceSettingString );
 			if ( url != null ) {
-				return new ScriptSourceInputFromUrl( url );
+				return new ScriptSourceInputFromUrl( url, charsetName );
 			}
 
 			// assume it is a File path
 			final File file = new File( scriptSourceSettingString );
-			return new ScriptSourceInputFromFile( file );
+			return new ScriptSourceInputFromFile( file, charsetName );
 		}
 	}
 
-	public static ScriptTargetOutput interpretScriptTargetSetting(Object scriptTargetSetting, ClassLoaderService classLoaderService) {
+	public static ScriptTargetOutput interpretScriptTargetSetting(
+			Object scriptTargetSetting,
+			ClassLoaderService classLoaderService,
+			String charsetName ) {
 		if ( scriptTargetSetting == null ) {
 			return null;
 		}
@@ -87,24 +96,44 @@ public class Helper {
 			// ClassLoaderService.locateResource() first tries the given resource name as url form...
 			final URL url = classLoaderService.locateResource( scriptTargetSettingString );
 			if ( url != null ) {
-				return new ScriptTargetOutputToUrl( url );
+				return new ScriptTargetOutputToUrl( url, charsetName );
 			}
 
 			// assume it is a File path
 			final File file = new File( scriptTargetSettingString );
-			return new ScriptTargetOutputToFile( file );
+			return new ScriptTargetOutputToFile( file, charsetName );
 		}
 	}
 
 	public static boolean interpretNamespaceHandling(Map configurationValues) {
+		//Print a warning if multiple conflicting properties are being set:
+		int count = 0;
+		if ( configurationValues.containsKey( AvailableSettings.HBM2DDL_CREATE_SCHEMAS ) ) {
+			count++;
+		}
+		if ( configurationValues.containsKey( AvailableSettings.HBM2DDL_CREATE_NAMESPACES ) ) {
+			count++;
+		}
+		if ( configurationValues.containsKey( AvailableSettings.HBM2DLL_CREATE_NAMESPACES ) ) {
+			count++;
+		}
+		if ( count > 1 ) {
+			log.multipleSchemaCreationSettingsDefined();
+		}
 		// prefer the JPA setting...
 		return ConfigurationHelper.getBoolean(
-				AvailableSettings.HBM2DLL_CREATE_SCHEMAS,
+				AvailableSettings.HBM2DDL_CREATE_SCHEMAS,
 				configurationValues,
+				//Then try the Hibernate ORM setting:
 				ConfigurationHelper.getBoolean(
-						AvailableSettings.HBM2DLL_CREATE_NAMESPACES,
+						AvailableSettings.HBM2DDL_CREATE_NAMESPACES,
 						configurationValues,
-						false
+						//And finally fall back to the old name this had before we fixed the typo:
+						ConfigurationHelper.getBoolean(
+								AvailableSettings.HBM2DLL_CREATE_NAMESPACES,
+								configurationValues,
+								false
+						)
 				)
 		);
 	}
@@ -119,14 +148,14 @@ public class Helper {
 
 	public static DatabaseInformation buildDatabaseInformation(
 			ServiceRegistry serviceRegistry,
-			JdbcConnectionContext connectionContext,
+			DdlTransactionIsolator ddlTransactionIsolator,
 			Namespace.Name defaultNamespace) {
 		final JdbcEnvironment jdbcEnvironment = serviceRegistry.getService( JdbcEnvironment.class );
 		try {
-			return new ImprovedDatabaseInformationImpl(
+			return new DatabaseInformationImpl(
 					serviceRegistry,
 					jdbcEnvironment,
-					connectionContext,
+					ddlTransactionIsolator,
 					defaultNamespace
 			);
 		}

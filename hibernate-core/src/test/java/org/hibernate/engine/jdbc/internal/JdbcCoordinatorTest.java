@@ -4,6 +4,9 @@ import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.SQLException;
 
+import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.engine.config.spi.ConfigurationService;
+import org.hibernate.engine.config.spi.StandardConverters;
 import org.hibernate.engine.jdbc.batch.spi.Batch;
 import org.hibernate.engine.jdbc.connections.spi.JdbcConnectionAccess;
 import org.hibernate.engine.jdbc.spi.JdbcServices;
@@ -59,8 +62,12 @@ public class JdbcCoordinatorTest {
 		when( sessionContext.getObserver() ).thenReturn( jdbcObserver );
 
 		JdbcServices jdbcServices = Mockito.mock( JdbcServices.class );
-		when( serviceRegistry.getService( eq( JdbcServices.class ) ) ).thenReturn(
-				jdbcServices );
+
+		ConfigurationService configurationService = Mockito.mock( ConfigurationService.class );
+		when( serviceRegistry.getService( eq( ConfigurationService.class ) ) ).thenReturn(
+				configurationService );
+		when( configurationService.getSetting( eq( AvailableSettings.CONNECTION_PROVIDER_DISABLES_AUTOCOMMIT ), same( StandardConverters.BOOLEAN), eq( false )) )
+				.thenReturn( false );
 
 		SqlExceptionHelper sqlExceptionHelper = Mockito.mock( SqlExceptionHelper.class );
 		when( jdbcServices.getSqlExceptionHelper() ).thenReturn(
@@ -68,7 +75,8 @@ public class JdbcCoordinatorTest {
 
 		JdbcCoordinatorImpl jdbcCoordinator = new JdbcCoordinatorImpl(
 				null,
-				sessionOwner
+				sessionOwner,
+				jdbcServices
 		);
 
 		Batch currentBatch = Mockito.mock( Batch.class );

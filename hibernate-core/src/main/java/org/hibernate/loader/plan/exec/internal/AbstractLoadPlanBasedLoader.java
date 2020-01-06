@@ -11,7 +11,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +24,7 @@ import org.hibernate.dialect.pagination.LimitHandler;
 import org.hibernate.dialect.pagination.LimitHelper;
 import org.hibernate.dialect.pagination.NoopLimitHandler;
 import org.hibernate.engine.jdbc.ColumnNameCache;
+import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
 import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.engine.jdbc.spi.ResultSetWrapper;
 import org.hibernate.engine.spi.PersistenceContext;
@@ -36,7 +37,7 @@ import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.loader.plan.exec.query.spi.NamedParameterContext;
 import org.hibernate.loader.plan.exec.spi.LoadQueryDetails;
-import org.hibernate.loader.spi.AfterLoadAction;
+import org.hibernate.resource.jdbc.ResourceRegistry;
 import org.hibernate.transform.ResultTransformer;
 import org.hibernate.type.Type;
 
@@ -82,25 +83,7 @@ public abstract class AbstractLoadPlanBasedLoader {
 			LoadQueryDetails loadQueryDetails,
 			boolean returnProxies,
 			ResultTransformer forcedResultTransformer) throws SQLException {
-		final List<AfterLoadAction> afterLoadActions = new ArrayList<AfterLoadAction>();
-		return executeLoad(
-				session,
-				queryParameters,
-				loadQueryDetails,
-				returnProxies,
-				forcedResultTransformer,
-				afterLoadActions
-		);
-	}
-
-	protected List executeLoad(
-			SharedSessionContractImplementor session,
-			QueryParameters queryParameters,
-			LoadQueryDetails loadQueryDetails,
-			boolean returnProxies,
-			ResultTransformer forcedResultTransformer,
-			List<AfterLoadAction> afterLoadActions) throws SQLException {
-		final PersistenceContext persistenceContext = session.getPersistenceContext();
+		final PersistenceContext persistenceContext = session.getPersistenceContextInternal();
 		final boolean defaultReadOnlyOrig = persistenceContext.isDefaultReadOnly();
 		if ( queryParameters.isReadOnlyInitialized() ) {
 			// The read-only/modifiable mode for the query was explicitly set.
@@ -114,11 +97,11 @@ public abstract class AbstractLoadPlanBasedLoader {
 		}
 		persistenceContext.beforeLoad();
 		try {
-			List results = null;
+			final List results;
 			final String sql = loadQueryDetails.getSqlStatement();
 			SqlStatementWrapper wrapper = null;
 			try {
-				wrapper = executeQueryStatement( sql, queryParameters, false, afterLoadActions, session );
+				wrapper = executeQueryStatement( sql, queryParameters, false, session );
 				results = loadQueryDetails.getResultSetProcessor().extractResults(
 						wrapper.getResultSet(),
 						session,
@@ -132,17 +115,15 @@ public abstract class AbstractLoadPlanBasedLoader {
 						returnProxies,
 						queryParameters.isReadOnly(),
 						forcedResultTransformer,
-						afterLoadActions
+						Collections.EMPTY_LIST
 				);
 			}
 			finally {
 				if ( wrapper != null ) {
-					session.getJdbcCoordinator().getResourceRegistry().release(
-							wrapper.getResultSet(),
-							wrapper.getStatement()
-					);
-					session.getJdbcCoordinator().getResourceRegistry().release( wrapper.getStatement() );
-					session.getJdbcCoordinator().afterStatementExecution();
+					final JdbcCoordinator jdbcCoordinator = session.getJdbcCoordinator();
+					final ResourceRegistry resourceRegistry = jdbcCoordinator.getResourceRegistry();
+					resourceRegistry.release( wrapper.getStatement() );
+					jdbcCoordinator.afterStatementExecution();
 				}
 				persistenceContext.afterLoad();
 			}
@@ -156,18 +137,9 @@ public abstract class AbstractLoadPlanBasedLoader {
 	}
 
 	protected SqlStatementWrapper executeQueryStatement(
-			final QueryParameters queryParameters,
-			final boolean scroll,
-			List<AfterLoadAction> afterLoadActions,
-			final SharedSessionContractImplementor session) throws SQLException {
-		return executeQueryStatement( getStaticLoadQuery().getSqlStatement(), queryParameters, scroll, afterLoadActions, session );
-	}
-
-	protected SqlStatementWrapper executeQueryStatement(
 			String sqlStatement,
 			QueryParameters queryParameters,
 			boolean scroll,
-			List<AfterLoadAction> afterLoadActions,
 			SharedSessionContractImplementor session) throws SQLException {
 
 		// Processing query filters.
@@ -180,7 +152,12 @@ public abstract class AbstractLoadPlanBasedLoader {
 		String sql = limitHandler.processSql( queryParameters.getFilteredSQL(), queryParameters.getRowSelection() );
 
 		// Adding locks and comments.
-		sql = preprocessSQL( sql, queryParameters, session.getJdbcServices().getJdbcEnvironment().getDialect(), afterLoadActions );
+		sql = session.getJdbcServices().getJdbcEnvironment().getDialect()
+				.addSqlHintOrComment(
+					sql,
+					queryParameters,
+					session.getFactory().getSessionFactoryOptions().isCommentsEnabled()
+				);
 
 		final PreparedStatement st = prepareQueryStatement( sql, queryParameters, limitHandler, scroll, session );
 		return new SqlStatementWrapper( st, getResultSet( st, queryParameters.getRowSelection(), limitHandler, queryParameters.hasAutoDiscoverScalarTypes(), session ) );
@@ -196,26 +173,6 @@ public abstract class AbstractLoadPlanBasedLoader {
 	protected LimitHandler getLimitHandler(RowSelection selection) {
 		final LimitHandler limitHandler = getFactory().getDialect().getLimitHandler();
 		return LimitHelper.useLimit( limitHandler, selection ) ? limitHandler : NoopLimitHandler.INSTANCE;
-	}
-
-	private String preprocessSQL(
-			String sql,
-			QueryParameters queryParameters,
-			Dialect dialect,
-			List<AfterLoadAction> afterLoadActions) {
-		return getFactory().getSettings().isCommentsEnabled()
-				? prependComment( sql, queryParameters )
-				: sql;
-	}
-
-	private String prependComment(String sql, QueryParameters parameters) {
-		final String comment = parameters.getComment();
-		if ( comment == null ) {
-			return sql;
-		}
-		else {
-			return "/* " + comment + " */ " + sql;
-		}
 	}
 
 	/**
@@ -341,7 +298,7 @@ public abstract class AbstractLoadPlanBasedLoader {
 	 * <p/>
 	 * Positional parameters are those specified by JDBC-style ? parameters
 	 * in the source query.  It is (currently) expected that these come
-	 * beforeQuery any named parameters in the source query.
+	 * before any named parameters in the source query.
 	 *
 	 * @param statement The JDBC prepared statement
 	 * @param queryParameters The encapsulation of the parameter values to be bound.
@@ -392,7 +349,6 @@ public abstract class AbstractLoadPlanBasedLoader {
 		if ( namedParams != null ) {
 			// assumes that types are all of span 1
 			final Iterator itr = namedParams.entrySet().iterator();
-			final boolean debugEnabled = log.isDebugEnabled();
 			int result = 0;
 			while ( itr.hasNext() ) {
 				final Map.Entry e = (Map.Entry) itr.next();
@@ -400,7 +356,7 @@ public abstract class AbstractLoadPlanBasedLoader {
 				final TypedValue typedval = (TypedValue) e.getValue();
 				final int[] locs = getNamedParameterLocs( name );
 				for ( int loc : locs ) {
-					if ( debugEnabled ) {
+					if ( log.isDebugEnabled() ) {
 						log.debugf(
 								"bindNamedParameters() %s -> %s [%s]",
 								typedval.getValue(),
@@ -443,10 +399,10 @@ public abstract class AbstractLoadPlanBasedLoader {
 			}
 			return rs;
 		}
-		catch ( SQLException sqle ) {
+		catch (SQLException | HibernateException ex) {
 			session.getJdbcCoordinator().getResourceRegistry().release( st );
 			session.getJdbcCoordinator().afterStatementExecution();
-			throw sqle;
+			throw ex;
 		}
 	}
 

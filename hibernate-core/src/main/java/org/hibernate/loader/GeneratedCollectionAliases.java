@@ -9,12 +9,11 @@ package org.hibernate.loader;
 import java.util.Collections;
 import java.util.Map;
 
-import org.hibernate.internal.util.StringHelper;
 import org.hibernate.persister.collection.CollectionPersister;
 
 /**
  * CollectionAliases which handles the logic of selecting user provided aliases (via return-property),
- * beforeQuery using the default aliases.
+ * before using the default aliases.
  *
  * @author Steve Ebersole
  * @author Max Rydahl Andersen
@@ -116,7 +115,7 @@ public class GeneratedCollectionAliases implements CollectionAliases {
 			return null;
 		}
 
-		return StringHelper.join( ", ", aliases );
+		return String.join( ", ", aliases );
 	}
 
 	private String[] getUserProvidedAliases(String propertyPath, String[] defaultAliases) {

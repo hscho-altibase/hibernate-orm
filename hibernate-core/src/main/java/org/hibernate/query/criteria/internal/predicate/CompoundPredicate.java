@@ -115,15 +115,6 @@ public class CompoundPredicate
 		return render( this, renderingContext );
 	}
 
-	private String operatorTextWithSeparator() {
-		return operatorTextWithSeparator( this.getOperator() );
-	}
-
-	@Override
-	public String renderProjection(RenderingContext renderingContext) {
-		return render( renderingContext );
-	}
-
 	/**
 	 * Create negation of compound predicate by using logic rules:
 	 * 1. not (x || y) is (not x && not y)

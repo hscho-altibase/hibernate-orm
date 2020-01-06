@@ -6,7 +6,11 @@
  */
 package org.hibernate.testing;
 
+import org.hibernate.dialect.DB2Dialect;
 import org.hibernate.dialect.Dialect;
+import org.hibernate.dialect.MySQLDialect;
+import org.hibernate.dialect.PostgreSQL81Dialect;
+import org.hibernate.dialect.SybaseDialect;
 
 /**
  * Container class for different implementation of the {@link DialectCheck} interface.
@@ -48,6 +52,12 @@ abstract public class DialectChecks {
 	public static class SupportsEmptyInListCheck implements DialectCheck {
 		public boolean isMatch(Dialect dialect) {
 			return dialect.supportsEmptyInList();
+		}
+	}
+
+	public static class NotSupportsEmptyInListCheck implements DialectCheck {
+		public boolean isMatch(Dialect dialect) {
+			return !dialect.supportsEmptyInList();
 		}
 	}
 
@@ -152,13 +162,13 @@ abstract public class DialectChecks {
 			return dialect.supportsExistsInSelect();
 		}
 	}
-	
+
 	public static class SupportsLobValueChangePropogation implements DialectCheck {
 		public boolean isMatch(Dialect dialect) {
 			return dialect.supportsLobValueChangePropogation();
 		}
 	}
-	
+
 	public static class SupportsLockTimeouts implements DialectCheck {
 		public boolean isMatch(Dialect dialect) {
 			return dialect.supportsLockTimeouts();
@@ -199,6 +209,84 @@ abstract public class DialectChecks {
 	public static class SupportPartitionBy implements DialectCheck {
 		public boolean isMatch(Dialect dialect) {
 			return dialect.supportsPartitionBy();
+		}
+	}
+
+	public static class SupportNonQueryValuesListWithCTE implements DialectCheck {
+		public boolean isMatch(Dialect dialect) {
+			return dialect.supportsValuesList() &&
+					dialect.supportsNonQueryWithCTE() &&
+					dialect.supportsRowValueConstructorSyntaxInInList();
+		}
+	}
+
+	public static class SupportValuesListAndRowValueConstructorSyntaxInInList
+			implements DialectCheck {
+		public boolean isMatch(Dialect dialect) {
+			return dialect.supportsValuesList() &&
+					dialect.supportsRowValueConstructorSyntaxInInList();
+		}
+	}
+
+	public static class SupportRowValueConstructorSyntaxInInList implements DialectCheck {
+		public boolean isMatch(Dialect dialect) {
+			return dialect.supportsRowValueConstructorSyntaxInInList();
+		}
+	}
+
+	public static class SupportSkipLocked implements DialectCheck {
+		public boolean isMatch(Dialect dialect) {
+			return dialect.supportsSkipLocked();
+		}
+	}
+
+	public static class SupportNoWait implements DialectCheck {
+		public boolean isMatch(Dialect dialect) {
+			return dialect.supportsNoWait();
+		}
+	}
+
+	public static class SupportDropConstraints implements DialectCheck {
+		public boolean isMatch(Dialect dialect) {
+			return dialect.dropConstraints();
+		}
+	}
+
+	public static class ForceLobAsLastValue implements DialectCheck {
+		public boolean isMatch(Dialect dialect) {
+			return dialect.forceLobAsLastValue();
+		}
+	}
+
+	public static class SupportsJdbcDriverProxying implements DialectCheck {
+		public boolean isMatch(Dialect dialect) {
+			return !(
+				dialect instanceof DB2Dialect
+			);
+		}
+	}
+
+	public static class SupportsNoColumnInsert implements DialectCheck {
+		public boolean isMatch(Dialect dialect) {
+			return dialect.supportsNoColumnsInsert();
+		}
+	}
+
+	public static class SupportsSelectAliasInGroupByClause implements DialectCheck {
+		public boolean isMatch(Dialect dialect) {
+			return dialect.supportsSelectAliasInGroupByClause();
+		}
+	}
+
+	public static class SupportsNClob implements DialectCheck {
+		@Override
+		public boolean isMatch(Dialect dialect) {
+			return !(
+				dialect instanceof DB2Dialect ||
+				dialect instanceof PostgreSQL81Dialect ||
+				dialect instanceof SybaseDialect ||
+				dialect instanceof MySQLDialect
+			);
 		}
 	}
 }

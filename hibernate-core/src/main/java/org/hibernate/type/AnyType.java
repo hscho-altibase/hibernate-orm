@@ -18,10 +18,12 @@ import java.util.Set;
 import org.hibernate.EntityMode;
 import org.hibernate.EntityNameResolver;
 import org.hibernate.FetchMode;
+import org.hibernate.Hibernate;
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
 import org.hibernate.PropertyNotFoundException;
 import org.hibernate.TransientObjectException;
+import org.hibernate.bytecode.enhance.spi.LazyPropertyInitializer;
 import org.hibernate.engine.internal.ForeignKeys;
 import org.hibernate.engine.jdbc.Size;
 import org.hibernate.engine.spi.CascadeStyle;
@@ -45,18 +47,20 @@ public class AnyType extends AbstractType implements CompositeType, AssociationT
 	private final TypeFactory.TypeScope scope;
 	private final Type identifierType;
 	private final Type discriminatorType;
+	private final boolean eager;
 
 	/**
 	 * Intended for use only from legacy {@link ObjectType} type definition
 	 */
 	protected AnyType(Type discriminatorType, Type identifierType) {
-		this( null, discriminatorType, identifierType );
+		this( null, discriminatorType, identifierType, true );
 	}
 
-	public AnyType(TypeFactory.TypeScope scope, Type discriminatorType, Type identifierType) {
+	public AnyType(TypeFactory.TypeScope scope, Type discriminatorType, Type identifierType, boolean lazy) {
 		this.scope = scope;
 		this.discriminatorType = discriminatorType;
 		this.identifierType = identifierType;
+		this.eager = !lazy;
 	}
 
 	public Type getIdentifierType() {
@@ -178,7 +182,7 @@ public class AnyType extends AbstractType implements CompositeType, AssociationT
 		}
 
 		if ( entityName == null ) {
-			for ( EntityNameResolver resolver : scope.resolveFactory().getMetamodel().getEntityNameResolvers() ) {
+			for ( EntityNameResolver resolver : scope.getTypeConfiguration().getSessionFactory().getMetamodel().getEntityNameResolvers() ) {
 				entityName = resolver.resolveEntityName( entity );
 				if ( entityName != null ) {
 					break;
@@ -191,7 +195,7 @@ public class AnyType extends AbstractType implements CompositeType, AssociationT
 			entityName = object.getClass().getName();
 		}
 
-		return scope.resolveFactory().getMetamodel().entityPersister( entityName );
+		return scope.getTypeConfiguration().getSessionFactory().getMetamodel().entityPersister( entityName );
 	}
 
 	@Override
@@ -264,7 +268,7 @@ public class AnyType extends AbstractType implements CompositeType, AssociationT
 			throws HibernateException {
 		return entityName==null || id==null
 				? null
-				: session.internalLoad( entityName, id, false, false );
+				: session.internalLoad( entityName, id, eager, false );
 	}
 
 	@Override
@@ -304,17 +308,20 @@ public class AnyType extends AbstractType implements CompositeType, AssociationT
 	@Override
 	public String toLoggableString(Object value, SessionFactoryImplementor factory) throws HibernateException {
 		//TODO: terrible implementation!
-		return value == null
-				? "null"
-				: factory.getTypeHelper()
-				.entity( HibernateProxyHelper.getClassWithoutInitializingProxy( value ) )
-				.toLoggableString( value, factory );
+		if ( value == null ) {
+			return "null";
+		}
+		if ( value == LazyPropertyInitializer.UNFETCHED_PROPERTY || !Hibernate.isInitialized( value ) ) {
+			return  "<uninitialized>";
+		}
+		Class valueClass = HibernateProxyHelper.getClassWithoutInitializingProxy( value );
+		return factory.getTypeHelper().entity( valueClass ).toLoggableString( value, factory );
 	}
 
 	@Override
 	public Object assemble(Serializable cached, SharedSessionContractImplementor session, Object owner) throws HibernateException {
 		final ObjectTypeCacheEntry e = (ObjectTypeCacheEntry) cached;
-		return e == null ? null : session.internalLoad( e.entityName, e.id, false, false );
+		return e == null ? null : session.internalLoad( e.entityName, e.id, eager, false );
 	}
 
 	@Override
@@ -343,7 +350,7 @@ public class AnyType extends AbstractType implements CompositeType, AssociationT
 		else {
 			final String entityName = session.bestGuessEntityName( original );
 			final Serializable id = ForeignKeys.getEntityIdentifierIfNotUnsaved( entityName, original, session );
-			return session.internalLoad( entityName, id, false, false );
+			return session.internalLoad( entityName, id, eager, false );
 		}
 	}
 

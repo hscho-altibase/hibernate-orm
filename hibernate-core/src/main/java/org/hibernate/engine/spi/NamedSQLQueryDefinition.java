@@ -164,7 +164,7 @@ public class NamedSQLQueryDefinition extends NamedQueryDefinition {
 			NativeSQLQueryReturn[] queryReturns) {
 		super(
 				name,
-				query.trim(), /* trim done to workaround stupid oracle bug that cant handle whitespaces beforeQuery a { in a sp */
+				query.trim(), /* trim done to workaround stupid oracle bug that cant handle whitespaces before a { in a sp */
 				cacheable,
 				cacheRegion,
 				timeout,
@@ -236,8 +236,8 @@ public class NamedSQLQueryDefinition extends NamedQueryDefinition {
 				allQueryReturns[i] = this.queryReturns[i];
 			}
 
-			for ( int j = 0; j < queryReturnsToAdd.length; j++ ) {
-				allQueryReturns[i] = queryReturnsToAdd[j];
+			for ( NativeSQLQueryReturn queryReturnsToAdd1 : queryReturnsToAdd ) {
+				allQueryReturns[i] = queryReturnsToAdd1;
 				i++;
 			}
 

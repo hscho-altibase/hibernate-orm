@@ -1,32 +1,65 @@
-import org.apache.tools.ant.filters.ReplaceTokens
-
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
  * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
  * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
+import org.apache.tools.ant.filters.ReplaceTokens
+
+apply from: rootProject.file( 'gradle/published-java-module.gradle' )
 apply plugin: 'antlr'
 apply plugin: 'hibernate-matrix-testing'
-
 apply plugin: 'org.hibernate.build.gradle.xjc'
 
-configurations {
-    hibernateJpaModelGenTool {
-        description = "Dependencies for running the Hibernate JPA Metamodel Generator AnnotationProcessor tool"
+description = 'Hibernate\'s core ORM functionality'
+
+ext {
+    jaxbTargetDir = file( "${buildDir}/generated-src/jaxb/main" )
+}
+
+sourceSets.main {
+    java.srcDir project.jaxbTargetDir
+}
+
+sourceSets {
+    // resources inherently exclude sources
+    test {
+        resources {
+            setSrcDirs( ['src/test/java','src/test/resources'] )
+        }
     }
-    tests {
-        description = 'Configuration for the produced test jar'
+
+    testJavassist {
+        java {
+            compileClasspath += main.output + test.output
+            runtimeClasspath += main.output + test.output
+        }
     }
 }
 
+configurations {
+    tests {
+        description = 'Configuration for the produced test jar'
+    }
+
+    //Configures the compile and runtime configurations for our javassist tests
+    //and includes the dependencies of the test task.
+    testJavassistCompile.extendsFrom testCompile
+    testJavassistRuntime.extendsFrom testRuntime
+}
+
 dependencies {
+
     compile( libraries.jpa )
+    // This can now be made provided
     compile( libraries.javassist )
+    // Could be made optional?
+    compile( libraries.byteBuddy )
     compile( libraries.antlr )
     compile( libraries.jta )
     compile( libraries.jandex )
     compile( libraries.classmate )
+    compile( libraries.activation )
 
     // We need dom4j for a number of things temporarily:
     //      1) (unsupported) EntityMode.DOM4J support
@@ -34,50 +67,35 @@ dependencies {
     //      3) hibernate-commons-annotations
     compile( libraries.dom4j )
     compile( libraries.commons_annotations )
-
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Java 9 ftw!
-    if ( JavaVersion.current().isJava9Compatible() ) {
-        // The JDK used to run Gradle is Java 9+, and we assume that that is the same
-        //		JDK for executing tasks
-        xjc( 'com.sun.xml.bind:jaxb-impl:2.2.11' )
-        xjc( 'org.glassfish.jaxb:jaxb-xjc:2.2.11' )
-        xjc( 'org.jvnet.jaxb2_commons:jaxb2-basics:0.11.0' )
-        xjc( 'org.jvnet.jaxb2_commons:jaxb2-basics-ant:0.11.0' )
-        xjc( 'javax:javaee-api:7.0' )
-
-        testCompile( 'com.sun.xml.bind:jaxb-impl:2.2.11' )
-        testCompile( 'org.glassfish.jaxb:jaxb-xjc:2.2.11' )
-        testCompile( 'org.jvnet.jaxb2_commons:jaxb2-basics:0.11.0' )
-        testCompile( 'org.jvnet.jaxb2_commons:jaxb2-basics-ant:0.11.0' )
-        testCompile( 'javax:javaee-api:7.0' )
-
-        testRuntime( 'com.sun.xml.bind:jaxb-impl:2.2.11' )
-        testRuntime( 'org.glassfish.jaxb:jaxb-xjc:2.2.11' )
-        testRuntime( 'org.jvnet.jaxb2_commons:jaxb2-basics:0.11.0' )
-        testRuntime( 'org.jvnet.jaxb2_commons:jaxb2-basics-ant:0.11.0' )
-        testRuntime( 'javax:javaee-api:7.0' )
-    }
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
     antlr( libraries.antlr )
+
+    // JAXB
+    compile( libraries.jaxb_api )
+    compile( libraries.jaxb_runtime )
+    xjc( libraries.jaxb_runtime )
+    xjc( libraries.jaxb_xjc )
+    xjc( libraries.jaxb2_basics )
+    xjc( libraries.jaxb2_basics_ant )
+    xjc( libraries.activation )
 
     provided( libraries.jacc )
     provided( libraries.validation )
     provided( libraries.ant )
-    provided( "javax.enterprise:cdi-api:1.1-PFD" )
+    provided( libraries.cdi )
 
     testCompile( project(':hibernate-testing') )
     testCompile( libraries.shrinkwrap_api )
     testCompile( libraries.shrinkwrap )
+    testCompile( libraries.jacc )
     testCompile( libraries.validation )
     testCompile( libraries.jandex )
     testCompile( libraries.classmate )
     testCompile( libraries.mockito )
-    testCompile( 'joda-time:joda-time:2.3' )
-    testCompile( "org.jboss.weld:weld-core:2.0.0.Beta6" )
-    testCompile( "org.jboss.weld.arquillian.container:arquillian-weld-ee-embedded-1.1:1.1.2.Final" )
-    compile( "javax.enterprise:cdi-api:1.1-PFD" ) {
+    testCompile( libraries.mockito_inline )
+    testCompile( libraries.jodaTime )
+    testCompile( libraries.assertj )
+
+    testCompile( libraries.cdi ) {
         // we need to force it to make sure we influence the one coming from arquillian
         force=true
     }
@@ -90,21 +108,30 @@ dependencies {
     // for testing stored procedure support
     testCompile( libraries.derby )
 
-    testRuntime( "org.jboss.spec.javax.ejb:jboss-ejb-api_3.2_spec:1.0.0.Alpha2" )
-    testRuntime( libraries.expression_language_api )
-    testRuntime( libraries.expression_language_impl )
+    testRuntime( "org.jboss.spec.javax.ejb:jboss-ejb-api_3.2_spec:1.0.0.Final" )
+    testRuntime( libraries.expression_language )
     testRuntime( 'jaxen:jaxen:1.1' )
     testRuntime( libraries.javassist )
-    testCompile( project( ':hibernate-jpamodelgen' ) )
-}
+    testRuntime( libraries.byteBuddy )
+    testRuntime( libraries.weld )
+    testRuntime( libraries.atomikos )
+    testRuntime( libraries.atomikos_jta )
+    testRuntime(libraries.wildfly_transaction_client)
 
-mavenPom {
-    name = 'Core Hibernate O/RM functionality'
-    description = 'The core O/RM functionality as provided by Hibernate'
-}
+    testAnnotationProcessor( project( ':hibernate-jpamodelgen' ) )
 
-def osgiDescription() {
-	return mavenPom.description
+    testCompile libraries.arquillian_junit_container
+    testCompile libraries.arquillian_protocol_servlet
+    testCompile libraries.shrinkwrap_descriptors_api_javaee
+    testCompile libraries.shrinkwrap_descriptors_impl_javaee
+    testCompile libraries.wildfly_arquillian_container_managed
+
+    testCompile libraries.jboss_ejb_spec_jar
+    testCompile libraries.jboss_annotation_spec_jar
+
+    // Additional tests requiring Javassist
+    // folder in src/javassist/java
+    testJavassistCompile libraries.javassist
 }
 
 jar {
@@ -120,21 +147,22 @@ jar {
             'javax.validation.metadata;resolution:=optional',
             // TODO: Shouldn't have to explicitly list this, but the plugin
             // generates it with a [1.0,2) version.
-            'javax.persistence;version="2.1.0"',
-            // Temporarily support JTA 1.1 -- Karaf and other frameworks still
-            // use it.  Without this, the plugin generates [1.2,2).
-            // build.gradle adds javax.transaction for all modules
-            'javax.transaction.xa;version="[1.1,2)"',
+            "javax.persistence;version=\"${project.jpaVersion.osgiName}\"",
             // optionals
             'javax.management;resolution:=optional',
             'javax.naming.event;resolution:=optional',
             'javax.naming.spi;resolution:=optional',
             'org.apache.tools.ant;resolution:=optional',
-			'org.apache.tools.ant.taskdefs;resolution:=optional',
-			'org.apache.tools.ant.types;resolution:=optional',
+            'org.apache.tools.ant.taskdefs;resolution:=optional',
+            'org.apache.tools.ant.types;resolution:=optional',
             '!javax.enterprise*',
             'javax.enterprise.context.spi;resolution:=optional',
-            'javax.enterprise.inject.spi;resolution:=optional'
+            'javax.enterprise.inject.spi;resolution:=optional',
+            'javax.inject;resolution:=optional',
+            'net.bytebuddy.*;resolution:=optional',
+            // We must specify the version explicitly to allow Karaf
+            // to use an older version of JAXB (the only one we can use in Karaf)
+            "javax.xml.bind.*;version=\"${project.jaxbApiVersionOsgiRange}\""
 
 //        // TODO: Uncomment once EntityManagerFactoryBuilderImpl no longer
 //        // uses ClassLoaderServiceImpl.
@@ -144,27 +172,14 @@ jar {
     }
 }
 
-ext {
-	jaxbTargetDir = file( "${buildDir}/generated-src/jaxb/main" )
-}
-
-sourceSets.main {
-    java.srcDir jaxbTargetDir
-}
-
-// resources inherently exclude sources
-sourceSets.test.resources {
-    setSrcDirs( ['src/test/java','src/test/resources'] )
-}
-
-idea {
-	module {
-		sourceDirs += file( "${buildDir}/generated-src/antlr/main" )
-	}
-}
+//idea {
+//	module {
+//		sourceDirs += file( "${buildDir}/generated-src/antlr/main" )
+//	}
+//}
 
 xjc {
-    outputDir = jaxbTargetDir
+    outputDir = project.jaxbTargetDir
 
     schemas {
         cfg {
@@ -185,14 +200,18 @@ xjc {
 tasks.compile.dependsOn generateGrammarSource
 
 task copyBundleResources (type: Copy) {
-    ext.bundlesTargetDir = file( "${buildDir}/bundles" )
+    ext {
+        bundlesTargetDir = file( "${buildDir}/bundles" )
+        bundleTokens = dbBundle[db]
+        ext.bundleTokens['buildDirName'] = buildDir.absolutePath
+    }
+
     from file('src/test/bundles')
-    into bundlesTargetDir
-    ext.bundleTokens = dbBundle[db]
-    ext.bundleTokens["buildDirName"] = buildDir.absolutePath
-    filter( ReplaceTokens, tokens: bundleTokens);
+    into ext.bundlesTargetDir
+    filter( ReplaceTokens, tokens: ext.bundleTokens)
+
     doFirst {
-        bundlesTargetDir.mkdirs()
+        ext.bundlesTargetDir.mkdirs()
     }
 }
 processTestResources.dependsOn copyBundleResources
@@ -206,16 +225,39 @@ artifacts {
     tests testJar
 }
 
-if ( JavaVersion.current().isJava9Compatible() ) {
-    logger.warn( '[WARN] Skipping Javassist-related tests for hibernate-core due to Javassist JDK 9 incompatibility' )
-
-    // we need to exclude tests using Javassist enhancement, which does not properly support
-    // Java 9 yet - https://issues.jboss.org/browse/JASSIST-261
-    test {
-        // rather than wild-cards, keep an explicit list
-        exclude 'org/hibernate/jpa/test/enhancement/InterceptFieldClassFileTransformerTest.class'
-        exclude 'org/hibernate/jpa/test/enhancement/runtime/JpaRuntimeEnhancementTest.class'
-        exclude 'org/hibernate/test/bytecode/enhancement/EnhancerTest.class'
-        exclude 'org/hibernate/test/bytecode/enhancement/basic/BasicInSessionTest.class'
+processTestResources {
+    doLast {
+        copy {
+            from file( 'src/test/resources' )
+            into file( "${buildDir}/resources/test" )
+            include 'arquillian.xml'
+            include 'org/hibernate/test/wf/ddl/manifest.mf'
+            expand wildFlyInstallDir: project( ':hibernate-orm-modules' ).wildFlyInstallDir,
+                   hibernateMajorMinorVersion: "${project.ormVersion.family}",
+                   arquillianDeploymentExportDir: "${rootProject.buildDir.absolutePath}/arquillian-deployments"
+        }
     }
 }
+
+test.dependsOn ':hibernate-orm-modules:prepareWildFlyForTests'
+
+test {
+    systemProperty 'file.encoding', 'utf-8'
+    beforeTest { descriptor ->
+        //println "Starting test: " + descriptor
+    }
+}
+
+//Create the task that runs the integration tests found from the
+//configured source directory and uses the correct classpath.
+task testJavassist(type: Test) {
+    testClassesDirs = sourceSets.testJavassist.output.classesDirs
+    classpath = sourceSets.testJavassist.runtimeClasspath
+    //If you want to ensure that integration tests are run every time when you invoke
+    //this task, uncomment the following line.
+    //outputs.upToDateWhen { false }
+}
+
+check.dependsOn testJavassist
+testJavassist.mustRunAfter test
+

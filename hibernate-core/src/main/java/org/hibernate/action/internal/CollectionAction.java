@@ -12,7 +12,7 @@ import org.hibernate.action.spi.AfterTransactionCompletionProcess;
 import org.hibernate.action.spi.BeforeTransactionCompletionProcess;
 import org.hibernate.action.spi.Executable;
 import org.hibernate.cache.CacheException;
-import org.hibernate.cache.spi.access.CollectionRegionAccessStrategy;
+import org.hibernate.cache.spi.access.CollectionDataAccess;
 import org.hibernate.cache.spi.access.SoftLock;
 import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
@@ -54,7 +54,7 @@ public abstract class CollectionAction implements Executable, Serializable, Comp
 	}
 
 	/**
-	 * Reconnect to session afterQuery deserialization...
+	 * Reconnect to session after deserialization...
 	 *
 	 * @param session The session being deserialized
 	 */
@@ -72,11 +72,11 @@ public abstract class CollectionAction implements Executable, Serializable, Comp
 
 	@Override
 	public final void beforeExecutions() throws CacheException {
-		// we need to obtain the lock beforeQuery any actions are executed, since this may be an inverse="true"
+		// we need to obtain the lock before any actions are executed, since this may be an inverse="true"
 		// bidirectional association and it is one of the earlier entity actions which actually updates
 		// the database (this action is responsible for second-level cache invalidation only)
 		if ( persister.hasCache() ) {
-			final CollectionRegionAccessStrategy cache = persister.getCacheAccessStrategy();
+			final CollectionDataAccess cache = persister.getCacheAccessStrategy();
 			final Object ck = cache.generateCacheKey(
 					key,
 					persister,
@@ -114,7 +114,7 @@ public abstract class CollectionAction implements Executable, Serializable, Comp
 		Serializable finalKey = key;
 		if ( key instanceof DelayedPostInsertIdentifier ) {
 			// need to look it up from the persistence-context
-			finalKey = session.getPersistenceContext().getEntry( collection.getOwner() ).getId();
+			finalKey = session.getPersistenceContextInternal().getEntry( collection.getOwner() ).getId();
 			if ( finalKey == key ) {
 				// we may be screwed here since the collection action is about to execute
 				// and we do not know the final owner key value
@@ -129,7 +129,7 @@ public abstract class CollectionAction implements Executable, Serializable, Comp
 
 	protected final void evict() throws CacheException {
 		if ( persister.hasCache() ) {
-			final CollectionRegionAccessStrategy cache = persister.getCacheAccessStrategy();
+			final CollectionDataAccess cache = persister.getCacheAccessStrategy();
 			final Object ck = cache.generateCacheKey(
 					key, 
 					persister,
@@ -173,7 +173,7 @@ public abstract class CollectionAction implements Executable, Serializable, Comp
 
 		@Override
 		public void doAfterTransactionCompletion(boolean success, SharedSessionContractImplementor session) {
-			final CollectionRegionAccessStrategy cache = persister.getCacheAccessStrategy();
+			final CollectionDataAccess cache = persister.getCacheAccessStrategy();
 			final Object ck = cache.generateCacheKey(
 					key,
 					persister,

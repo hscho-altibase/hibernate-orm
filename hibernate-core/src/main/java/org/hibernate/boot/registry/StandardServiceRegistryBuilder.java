@@ -37,13 +37,42 @@ import org.hibernate.service.spi.ServiceContributor;
  */
 public class StandardServiceRegistryBuilder {
 	/**
+	 * Intended only for use from {@link org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl}.
+	 *
+	 * Creates a StandardServiceRegistryBuilder specific to the needs of JPA bootstrapping.
+	 * Specifically we ignore properties found in `cfg.xml` files in terms of adding them to
+	 * the builder immediately.  EntityManagerFactoryBuilderImpl handles collecting these
+	 * properties itself.
+	 */
+	public static StandardServiceRegistryBuilder forJpa(BootstrapServiceRegistry bootstrapServiceRegistry) {
+		final LoadedConfig loadedConfig = new LoadedConfig( null ) {
+			@Override
+			protected void addConfigurationValues(Map configurationValues) {
+				// here, do nothing
+			}
+		};
+		return new StandardServiceRegistryBuilder(
+				bootstrapServiceRegistry,
+				new HashMap(),
+				loadedConfig
+		) {
+			@Override
+			public StandardServiceRegistryBuilder configure(LoadedConfig loadedConfig) {
+				getAggregatedCfgXml().merge( loadedConfig );
+				// super also collects the properties - here we skip that part
+				return this;
+			}
+		};
+	}
+
+	/**
 	 * The default resource name for a hibernate configuration xml file.
 	 */
 	public static final String DEFAULT_CFG_RESOURCE_NAME = "hibernate.cfg.xml";
 
 	private final Map settings;
 	private final List<StandardServiceInitiator> initiators = standardInitiatorList();
-	private final List<ProvidedService> providedServices = new ArrayList<ProvidedService>();
+	private final List<ProvidedService> providedServices = new ArrayList<>();
 
 	private boolean autoCloseRegistry = true;
 
@@ -64,7 +93,22 @@ public class StandardServiceRegistryBuilder {
 	 * @param bootstrapServiceRegistry Provided bootstrap registry to use.
 	 */
 	public StandardServiceRegistryBuilder(BootstrapServiceRegistry bootstrapServiceRegistry) {
-		this( bootstrapServiceRegistry,  LoadedConfig.baseline() );
+		this( bootstrapServiceRegistry, LoadedConfig.baseline() );
+	}
+
+	/**
+	 * Intended for use exclusively from JPA boot-strapping.
+	 *
+	 * @see #forJpa
+	 */
+	private StandardServiceRegistryBuilder(
+			BootstrapServiceRegistry bootstrapServiceRegistry,
+			Map settings,
+			LoadedConfig loadedConfig) {
+		this.bootstrapServiceRegistry = bootstrapServiceRegistry;
+		this.configLoader = new ConfigLoader( bootstrapServiceRegistry );
+		this.settings = settings;
+		this.aggregatedCfgXml = loadedConfig;
 	}
 
 	/**
@@ -72,11 +116,17 @@ public class StandardServiceRegistryBuilder {
 	 *
 	 * @param bootstrapServiceRegistry Provided bootstrap registry to use.
 	 */
-	public StandardServiceRegistryBuilder(BootstrapServiceRegistry bootstrapServiceRegistry, LoadedConfig loadedConfigBaseline) {
+	public StandardServiceRegistryBuilder(
+			BootstrapServiceRegistry bootstrapServiceRegistry,
+			LoadedConfig loadedConfigBaseline) {
 		this.settings = Environment.getProperties();
 		this.bootstrapServiceRegistry = bootstrapServiceRegistry;
 		this.configLoader = new ConfigLoader( bootstrapServiceRegistry );
 		this.aggregatedCfgXml = loadedConfigBaseline;
+	}
+
+	public ConfigLoader getConfigLoader() {
+		return configLoader;
 	}
 
 	/**
@@ -92,18 +142,19 @@ public class StandardServiceRegistryBuilder {
 	 * @return List of standard initiators
 	 */
 	private static List<StandardServiceInitiator> standardInitiatorList() {
-		final List<StandardServiceInitiator> initiators = new ArrayList<StandardServiceInitiator>();
+		final List<StandardServiceInitiator> initiators = new ArrayList<>( StandardServiceInitiators.LIST.size() );
 		initiators.addAll( StandardServiceInitiators.LIST );
 		return initiators;
 	}
 
+	@SuppressWarnings("unused")
 	public BootstrapServiceRegistry getBootstrapServiceRegistry() {
 		return bootstrapServiceRegistry;
 	}
 
 	/**
 	 * Read settings from a {@link java.util.Properties} file by resource name.
-	 *
+	 * <p>
 	 * Differs from {@link #configure()} and {@link #configure(String)} in that here we expect to read a
 	 * {@link java.util.Properties} file while for {@link #configure} we read the XML variant.
 	 *
@@ -114,7 +165,7 @@ public class StandardServiceRegistryBuilder {
 	 * @see #configure()
 	 * @see #configure(String)
 	 */
-	@SuppressWarnings( {"unchecked"})
+	@SuppressWarnings({"unchecked"})
 	public StandardServiceRegistryBuilder loadProperties(String resourceName) {
 		settings.putAll( configLoader.loadProperties( resourceName ) );
 		return this;
@@ -122,7 +173,7 @@ public class StandardServiceRegistryBuilder {
 
 	/**
 	 * Read settings from a {@link java.util.Properties} file by File reference
-	 *
+	 * <p>
 	 * Differs from {@link #configure()} and {@link #configure(String)} in that here we expect to read a
 	 * {@link java.util.Properties} file while for {@link #configure} we read the XML variant.
 	 *
@@ -133,7 +184,7 @@ public class StandardServiceRegistryBuilder {
 	 * @see #configure()
 	 * @see #configure(String)
 	 */
-	@SuppressWarnings( {"unchecked"})
+	@SuppressWarnings({"unchecked"})
 	public StandardServiceRegistryBuilder loadProperties(File file) {
 		settings.putAll( configLoader.loadProperties( file ) );
 		return this;
@@ -171,7 +222,7 @@ public class StandardServiceRegistryBuilder {
 		return configure( configLoader.loadConfigXmlUrl( url ) );
 	}
 
-	@SuppressWarnings( {"unchecked"})
+	@SuppressWarnings({"unchecked"})
 	public StandardServiceRegistryBuilder configure(LoadedConfig loadedConfig) {
 		aggregatedCfgXml.merge( loadedConfig );
 		settings.putAll( loadedConfig.getConfigurationValues() );
@@ -187,7 +238,7 @@ public class StandardServiceRegistryBuilder {
 	 *
 	 * @return this, for method chaining
 	 */
-	@SuppressWarnings( {"unchecked", "UnusedDeclaration"})
+	@SuppressWarnings({"unchecked", "UnusedDeclaration"})
 	public StandardServiceRegistryBuilder applySetting(String settingName, Object value) {
 		settings.put( settingName, value );
 		return this;
@@ -200,10 +251,14 @@ public class StandardServiceRegistryBuilder {
 	 *
 	 * @return this, for method chaining
 	 */
-	@SuppressWarnings( {"unchecked", "UnusedDeclaration"})
+	@SuppressWarnings({"unchecked", "UnusedDeclaration"})
 	public StandardServiceRegistryBuilder applySettings(Map settings) {
 		this.settings.putAll( settings );
 		return this;
+	}
+
+	public void clearSettings() {
+		settings.clear();
 	}
 
 	/**
@@ -213,7 +268,7 @@ public class StandardServiceRegistryBuilder {
 	 *
 	 * @return this, for method chaining
 	 */
-	@SuppressWarnings( {"UnusedDeclaration"})
+	@SuppressWarnings({"UnusedDeclaration"})
 	public StandardServiceRegistryBuilder addInitiator(StandardServiceInitiator initiator) {
 		initiators.add( initiator );
 		return this;
@@ -227,7 +282,7 @@ public class StandardServiceRegistryBuilder {
 	 *
 	 * @return this, for method chaining
 	 */
-	@SuppressWarnings( {"unchecked"})
+	@SuppressWarnings({"unchecked"})
 	public StandardServiceRegistryBuilder addService(final Class serviceRole, final Service service) {
 		providedServices.add( new ProvidedService( serviceRole, service ) );
 		return this;
@@ -272,10 +327,8 @@ public class StandardServiceRegistryBuilder {
 		applyServiceContributingIntegrators();
 		applyServiceContributors();
 
-		final Map settingsCopy = new HashMap();
-		settingsCopy.putAll( settings );
+		final Map settingsCopy = new HashMap( settings );
 		settingsCopy.put( org.hibernate.boot.cfgxml.spi.CfgXmlAccessService.LOADED_CONFIG_KEY, aggregatedCfgXml );
-		Environment.verifyProperties( settingsCopy );
 		ConfigurationHelper.resolvePlaceHolders( settingsCopy );
 
 		return new StandardServiceRegistryImpl(
@@ -289,9 +342,11 @@ public class StandardServiceRegistryBuilder {
 
 	@SuppressWarnings("deprecation")
 	private void applyServiceContributingIntegrators() {
-		for ( Integrator integrator : bootstrapServiceRegistry.getService( IntegratorService.class ).getIntegrators() ) {
+		for ( Integrator integrator : bootstrapServiceRegistry.getService( IntegratorService.class )
+				.getIntegrators() ) {
 			if ( org.hibernate.integrator.spi.ServiceContributingIntegrator.class.isInstance( integrator ) ) {
-				org.hibernate.integrator.spi.ServiceContributingIntegrator.class.cast( integrator ).prepareServices( this );
+				org.hibernate.integrator.spi.ServiceContributingIntegrator.class.cast( integrator ).prepareServices(
+						this );
 			}
 		}
 	}

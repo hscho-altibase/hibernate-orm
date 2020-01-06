@@ -16,6 +16,7 @@ import org.hibernate.hql.internal.antlr.SqlTokenTypes;
 import org.hibernate.hql.internal.ast.util.ASTAppender;
 import org.hibernate.hql.internal.ast.util.ASTIterator;
 import org.hibernate.hql.internal.ast.util.ASTPrinter;
+import org.hibernate.hql.internal.ast.util.TokenPrinters;
 import org.hibernate.type.Type;
 
 import antlr.SemanticException;
@@ -121,7 +122,7 @@ public class SelectClause extends SelectExpressionList {
 		ArrayList queryReturnTypeList = new ArrayList();
 
 		// First, collect all of the select expressions.
-		// NOTE: This must be done *beforeQuery* invoking setScalarColumnText() because setScalarColumnText()
+		// NOTE: This must be done *before* invoking setScalarColumnText() because setScalarColumnText()
 		// changes the AST!!!
 		SelectExpression[] selectExpressions = collectSelectExpressions();
 
@@ -157,7 +158,7 @@ public class SelectClause extends SelectExpressionList {
 				if ( type == null ) {
 					throw new QueryException(
 							"No data type for node: " + selectExpression.getClass().getName() + " "
-									+ new ASTPrinter( SqlTokenTypes.class ).showAsString( (AST) selectExpression, "" )
+									+ TokenPrinters.SQL_TOKEN_PRINTER.showAsString( (AST) selectExpression, "" )
 					);
 				}
 				//sqlResultTypeList.add( type );
@@ -176,7 +177,7 @@ public class SelectClause extends SelectExpressionList {
 			}
 		}
 
-		//init the aliases, afterQuery initing the constructornode
+		//init the aliases, after initing the constructornode
 		initAliases( selectExpressions );
 
 		if ( !getWalker().isShallowQuery() ) {
@@ -207,7 +208,9 @@ public class SelectClause extends SelectExpressionList {
 					else {
 						origin = fromElement.getRealOrigin();
 					}
-					if ( !fromElementsForLoad.contains( origin ) ) {
+					if ( !fromElementsForLoad.contains( origin )
+							// work around that fetch joins of element collections where their parent instead of the root is selected
+							&& ( !fromElement.isCollectionJoin() || !fromElementsForLoad.contains( fromElement.getFetchOrigin() ) ) ) {
 						throw new QueryException(
 								"query specified join fetching, but the owner " +
 										"of the fetched association was not present in the select list " +
@@ -259,7 +262,7 @@ public class SelectClause extends SelectExpressionList {
 	}
 
 	private void initializeColumnNames() {
-		// Generate an 2d array of column names, the first dimension is parallel with the
+		// Generate a 2d array of column names, the first dimension is parallel with the
 		// return types array.  The second dimension is the list of column names for each
 		// type.
 

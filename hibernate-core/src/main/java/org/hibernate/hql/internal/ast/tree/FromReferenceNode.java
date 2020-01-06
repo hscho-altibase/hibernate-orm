@@ -109,6 +109,11 @@ public abstract class FromReferenceNode extends AbstractSelectExpression
 		resolve( generateJoin, implicitJoin, classAlias, null );
 	}
 
+	public void resolve(boolean generateJoin, boolean implicitJoin, String classAlias, AST parent)
+			throws SemanticException {
+		resolve( generateJoin, implicitJoin, classAlias, parent, null );
+	}
+
 	public void prepareForDot(String propertyName) throws SemanticException {
 	}
 
@@ -130,6 +135,16 @@ public abstract class FromReferenceNode extends AbstractSelectExpression
 
 		return getWalker().getStatementType() == HqlSqlTokenTypes.DELETE
 				|| getWalker().getStatementType() == HqlSqlTokenTypes.UPDATE;
+	}
+
+	/**
+	 * Returns table names which are referenced by this node. If the tables
+	 * can not be determined it returns null.
+	 *
+	 * @return table names or null.
+	 */
+	public String[] getReferencedTables() {
+		return null;
 	}
 
 }

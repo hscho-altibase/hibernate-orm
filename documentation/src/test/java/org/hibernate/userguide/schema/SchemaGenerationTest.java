@@ -44,14 +44,16 @@ public class SchemaGenerationTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Override
-	protected void addConfigOptions(Map options) {
+	protected Map buildSettings() {
+		Map settings = super.buildSettings();
 		if ( getDialect().getClass().equals( H2Dialect.class ) ) {
-			options.put(
+			settings.put(
 					AvailableSettings.HBM2DDL_IMPORT_FILES,
 					"schema-generation.sql"
 			);
-			options.put( org.hibernate.cfg.AvailableSettings.HBM2DDL_AUTO, "update" );
+			settings.put( org.hibernate.cfg.AvailableSettings.HBM2DDL_AUTO, "update" );
 		}
+		return settings;
 	}
 
 	@Override
@@ -89,6 +91,10 @@ public class SchemaGenerationTest extends BaseEntityManagerFunctionalTestCase {
 		@LazyGroup( "lobs" )
 		private Blob image;
 
+		//Getters and setters are omitted for brevity
+
+	//end::schema-generation-domain-model-example[]
+
 		public Integer getId() {
 			return id;
 		}
@@ -120,6 +126,7 @@ public class SchemaGenerationTest extends BaseEntityManagerFunctionalTestCase {
 		public void setImage(Blob image) {
 			this.image = image;
 		}
+	//tag::schema-generation-domain-model-example[]
 	}
 
 	@Entity(name = "Person")
@@ -131,7 +138,11 @@ public class SchemaGenerationTest extends BaseEntityManagerFunctionalTestCase {
 		private String name;
 
 		@OneToMany(mappedBy = "author")
-		private List<Book> books = new ArrayList<>(  );
+		private List<Book> books = new ArrayList<>();
+
+		//Getters and setters are omitted for brevity
+
+	//end::schema-generation-domain-model-example[]
 
 		public Long getId() {
 			return id;
@@ -152,6 +163,7 @@ public class SchemaGenerationTest extends BaseEntityManagerFunctionalTestCase {
 		public List<Book> getBooks() {
 			return books;
 		}
+	//tag::schema-generation-domain-model-example[]
 	}
 
 	@Entity(name = "Book")
@@ -167,6 +179,10 @@ public class SchemaGenerationTest extends BaseEntityManagerFunctionalTestCase {
 
 		@ManyToOne
 		private Person author;
+
+		//Getters and setters are omitted for brevity
+
+	//end::schema-generation-domain-model-example[]
 
 		public Long getId() {
 			return id;
@@ -199,6 +215,7 @@ public class SchemaGenerationTest extends BaseEntityManagerFunctionalTestCase {
 		public void setIsbn(String isbn) {
 			this.isbn = isbn;
 		}
+	//tag::schema-generation-domain-model-example[]
 	}
 	//end::schema-generation-domain-model-example[]
 }

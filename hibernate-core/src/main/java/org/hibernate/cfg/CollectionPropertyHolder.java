@@ -26,7 +26,7 @@ import org.hibernate.annotations.ManyToAny;
 import org.hibernate.annotations.MapKeyType;
 import org.hibernate.annotations.common.reflection.XClass;
 import org.hibernate.annotations.common.reflection.XProperty;
-import org.hibernate.boot.spi.AttributeConverterDescriptor;
+import org.hibernate.boot.model.convert.spi.ConverterDescriptor;
 import org.hibernate.boot.spi.MetadataBuildingContext;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
@@ -66,8 +66,8 @@ public class CollectionPropertyHolder extends AbstractPropertyHolder {
 		this.collection = collection;
 		setCurrentProperty( property );
 
-		this.elementAttributeConversionInfoMap = new HashMap<String, AttributeConversionInfo>();
-		this.keyAttributeConversionInfoMap = new HashMap<String, AttributeConversionInfo>();
+		this.elementAttributeConversionInfoMap = new HashMap<>();
+		this.keyAttributeConversionInfoMap = new HashMap<>();
 	}
 
 	public Collection getCollectionBinding() {
@@ -288,6 +288,11 @@ public class CollectionPropertyHolder extends AbstractPropertyHolder {
 		return false;
 	}
 
+	@Override
+	public boolean isWithinElementCollection() {
+		return false;
+	}
+
 	public PersistentClass getPersistentClass() {
 		return collection.getOwner();
 	}
@@ -376,7 +381,7 @@ public class CollectionPropertyHolder extends AbstractPropertyHolder {
 		}
 	}
 
-	public AttributeConverterDescriptor resolveElementAttributeConverterDescriptor(XProperty collectionXProperty, XClass elementXClass) {
+	public ConverterDescriptor resolveElementAttributeConverterDescriptor(XProperty collectionXProperty, XClass elementXClass) {
 		AttributeConversionInfo info = locateAttributeConversionInfo( "element" );
 		if ( info != null ) {
 			if ( info.isConversionDisabled() ) {
@@ -407,7 +412,7 @@ public class CollectionPropertyHolder extends AbstractPropertyHolder {
 	private Class determineElementClass(XClass elementXClass) {
 		if ( elementXClass != null ) {
 			try {
-				return getContext().getBuildingOptions().getReflectionManager().toClass( elementXClass );
+				return getContext().getBootstrapContext().getReflectionManager().toClass( elementXClass );
 			}
 			catch (Exception e) {
 				log.debugf(
@@ -433,7 +438,7 @@ public class CollectionPropertyHolder extends AbstractPropertyHolder {
 		return null;
 	}
 
-	public AttributeConverterDescriptor mapKeyAttributeConverterDescriptor(XProperty mapXProperty, XClass keyXClass) {
+	public ConverterDescriptor mapKeyAttributeConverterDescriptor(XProperty mapXProperty, XClass keyXClass) {
 		AttributeConversionInfo info = locateAttributeConversionInfo( "key" );
 		if ( info != null ) {
 			if ( info.isConversionDisabled() ) {
@@ -464,7 +469,7 @@ public class CollectionPropertyHolder extends AbstractPropertyHolder {
 	private Class determineKeyClass(XClass keyXClass) {
 		if ( keyXClass != null ) {
 			try {
-				return getContext().getBuildingOptions().getReflectionManager().toClass( keyXClass );
+				return getContext().getBootstrapContext().getReflectionManager().toClass( keyXClass );
 			}
 			catch (Exception e) {
 				log.debugf(

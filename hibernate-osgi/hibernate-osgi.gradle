@@ -4,7 +4,41 @@
  * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
  * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
-apply plugin: 'karaf-featuresgen'
+
+apply from: rootProject.file( 'gradle/published-java-module.gradle' )
+apply plugin: 'com.github.lburgazzoli.karaf'
+
+description = 'Support for running Hibernate O/RM in OSGi environments'
+
+ext {
+	osgiCoreVersion = '6.0.0'
+	osgiCompediumVersion = '5.0.0'
+	karafVersion = '4.2.1'
+	paxExamVersion = '4.12.0'
+}
+
+/*
+ * With the current karaf/pax-exam versions and with JDK11.0.3,
+ * we get errors like "java.lang.IllegalStateException: Unknown protocol: jrt".
+ *
+ * This is suspiciously similar to the problems we had on Hibernate Search,
+ * and we gave up the idea of fixing those after a few hours.
+ *
+ * Copy-pasting the explanation from Search (not sure it applies here, but it's likely):
+ * > Upgrading to Karaf 4.2.5 fixes that, but then we get errors about "/karaf.log" not being accessible.
+ * > Upgrading once again to Pax-exam 4.13.1 fixes that, but then startup looks stuck at some point,
+ * > without any particular error even if we raise all the different log levels to "trace".
+ * > Upgrading pax-url to 2.6.1 to be in line with the versions in the Karaf pom doesn't change anything.
+ * > Strangely, with these upgrades, everything still works fine with JDK8,
+ * > but we get in trouble with JDK11.0.0 and above.
+ * > A bit ironic since the problems we were trying to solve initially only affected JDK11.0.3,
+ * > not JDK11.0.0.
+ */
+if ( JavaVersion.current().isJava11Compatible() ) {
+	logger.warn( '[WARN] Skipping all tests for hibernate-osgi due to Karaf/Pax-Exam issues with latest JDK 11' )
+	test.enabled = false
+}
+
 
 sourceSets {
 	test {
@@ -20,94 +54,57 @@ configurations {
 		description = 'Configuration used to isolate the dependency on the Karaf distro'
 		transitive = false
 	}
-	hibernateEntityManager {
-		description = 'Used in Karaf feature generation to define the Hibernate JPA dependencies'
+	hibernateEnvers {
+		description = 'Feature for easily adding Envers support to hibernate-orm'
 		transitive = false
 	}
 }
 
-ext {
-	// MUST use 4.3.1!  4.3.0 was compiled with "-target jsr14".
-	// http://blog.osgi.org/2012/10/43-companion-code-for-java-7.html
-	osgiCoreVersion = '4.3.1'
-	karafVersion = '3.0.3'
-	paxExamVersion = '4.4.0'
-	paxUrlVersion = '2.4.1'
-}
-
 dependencies {
-	ext {
-		paxExamVersion = '4.4.0'
-		paxExamUrlVersion = '2.4.1'
-		karafVersion = '3.0.3'
+	compile( project( ':hibernate-core' ) ) {
+		// having javax.activation-api as a dependency requires us to have com.sun.activation:javax.activation
+		// this dependency wasn't there in the 5.2.x bundles so ignoring it for now
+		// we might reintroduce it at some point if users complain about it
+		exclude module: 'javax.activation-api'
+		// JAXB is included in the Karaf distribution
+		exclude module: 'jaxb-api'
+		exclude module: 'jaxb-runtime'
 	}
-
-	compile( project( ':hibernate-core' ) )
 	testCompile( project( ':hibernate-envers' ) )
 
-	// MUST use 4.3.1!  4.3.0 was compiled with "-target jsr14".
-	// http://blog.osgi.org/2012/10/43-companion-code-for-java-7.html
 	compile "org.osgi:org.osgi.core:${osgiCoreVersion}"
-	compile "org.osgi:org.osgi.compendium:${osgiCoreVersion}"
+	compile "org.osgi:org.osgi.compendium:${osgiCompediumVersion}"
+	compile "net.bytebuddy:byte-buddy:${byteBuddyVersion}"
 
-	testCompile "org.ops4j.pax.exam:pax-exam:${paxExamVersion}"
-	testCompile "org.ops4j.pax.exam:pax-exam-junit4:${paxExamVersion}"
-	testCompile "org.ops4j.pax.exam:pax-exam-container-karaf:${paxExamVersion}"
+	// Needed by JBoss JTA
+	runtime( libraries.interceptor )
+
+	testCompile "org.ops4j.pax.exam:pax-exam:${project.paxExamVersion}"
+	testCompile "org.ops4j.pax.exam:pax-exam-junit4:${project.paxExamVersion}"
+	testCompile "org.ops4j.pax.exam:pax-exam-container-karaf:${project.paxExamVersion}"
 	// Need this explicitly in order to use @Inject -> shouldn't this be a transtive dep of pax-exam?
 	//      is there ever a pax exam test that *does not* use this?
 	testCompile 'javax.inject:javax.inject:1'
 
-	testCompile( "org.apache.karaf:apache-karaf:${karafVersion}" ) {
+	testCompile( "org.apache.karaf:apache-karaf:${project.karafVersion}" ) {
 		// having trouble finding this one locally
 		exclude group: 'org.eclipse', module: 'org.eclipse.osgi'
 	}
 
-	karafDistro "org.apache.karaf:apache-karaf:${karafVersion}@tar.gz"
+	karafDistro "org.apache.karaf:apache-karaf:${project.karafVersion}@tar.gz"
 
-	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	// Java 9 ftw!
-	if ( JavaVersion.current().isJava9Compatible() ) {
-		// The JDK used to run Gradle is Java 9+, and we assume that that is the same
-		//		JDK for executing tasks
-		compile( 'com.sun.xml.bind:jaxb-impl:2.2.11' )
-		compile( 'org.glassfish.jaxb:jaxb-xjc:2.2.11' )
-		compile( 'org.jvnet.jaxb2_commons:jaxb2-basics:0.11.0' )
-		compile( 'org.jvnet.jaxb2_commons:jaxb2-basics-ant:0.11.0' )
-		compile( 'javax:javaee-api:7.0' )
-
-		testCompile( 'com.sun.xml.bind:jaxb-impl:2.2.11' )
-		testCompile( 'org.glassfish.jaxb:jaxb-xjc:2.2.11' )
-		testCompile( 'org.jvnet.jaxb2_commons:jaxb2-basics:0.11.0' )
-		testCompile( 'org.jvnet.jaxb2_commons:jaxb2-basics-ant:0.11.0' )
-		testCompile( 'javax:javaee-api:7.0' )
-
-		testRuntime( 'com.sun.xml.bind:jaxb-impl:2.2.11' )
-		testRuntime( 'org.glassfish.jaxb:jaxb-xjc:2.2.11' )
-		testRuntime( 'org.jvnet.jaxb2_commons:jaxb2-basics:0.11.0' )
-		testRuntime( 'org.jvnet.jaxb2_commons:jaxb2-basics-ant:0.11.0' )
-		testRuntime( 'javax:javaee-api:7.0' )
-	}
-	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-}
-
-mavenPom {
-	name = 'Hibernate OSGi Support'
-	description = 'Support for running Hibernate O/RM in OSGi environments'
-}
-
-def osgiDescription() {
-	return mavenPom.description
+	hibernateEnvers( project( ':hibernate-envers' ) )
 }
 
 jar {
 	manifest {
 		instruction 'Bundle-Activator', 'org.hibernate.osgi.HibernateBundleActivator'
-
+        instruction 'Provide-Capability', 'osgi.service;effective:=active;objectClass=javax.persistence.spi.PersistenceProvider'
 		instructionFirst 'Import-Package',
 			// TODO: Shouldn't have to explicitly list this, but the plugin
 			// generates it with a [1.0,2) version.
-			'javax.persistence;version="2.1.0"',
-			'javax.persistence.spi;version="2.1.0"'
+			"javax.persistence;version=\"${project.jpaVersion.osgiName}\"",
+			"javax.persistence.spi;version=\"${project.jpaVersion.osgiName}\""
 	}
 }
 
@@ -133,173 +130,32 @@ task generateVersionFile {
 	}
 }
 
-karafFeatures {
+karaf {
 	features {
-		hibernateOrm {
-			name = 'hibernate-orm'
+		xsdVersion  = '1.4.0'
+		feature {
+			name        = 'hibernate-orm'
 			description = 'Combines all Hibernate core dependencies and required modules into a single feature'
-			projects = [
-					rootProject.childProjects.'hibernate-core',
-					project
-			]
-			// According to Christian Schneider, these should not be needed
-			bundle {
-				match {
-					group = 'org.osgi'
-					module = 'org.osgi.core'
-				}
-				include = false
+			includeProject = true
+			feature ('wrap') {
+				prerequisite = true
 			}
-			bundle {
-				match {
-					group = 'org.osgi'
-					module = 'org.osgi.compendium'
-				}
-				include = false
-			}
-			bundle {
-				match {
-					group = 'org.jboss.logging'
-					module = 'jboss-logging-annotations'
-				}
-				include = false
-			}
-			bundle {
-				match group: 'org.jboss.logging', module: 'jboss-logging-processor'
-				include = false
-			}
-			bundle {
-				match {
-					group = 'org.hibernate.javax.persistence'
-					module = 'hibernate-jpa-2.1-api'
-				}
-				dependency = true
-			}
-			bundle {
-				match {
-					group = 'org.apache.geronimo.specs'
-					module = 'geronimo-jta_1.1_spec'
-				}
-				dependency = true
-			}
-			bundle {
-				match group: 'antlr', module: 'antlr'
-				remap group: 'org.apache.servicemix.bundles', module: 'org.apache.servicemix.bundles.antlr', version: '2.7.7_5'
-			}
-			bundle {
-				match group: 'dom4j', module: 'dom4j'
-				remap group: 'org.apache.servicemix.bundles', module: 'org.apache.servicemix.bundles.dom4j', version: '1.6.1_5'
-			}
+			feature 'transaction-api'
+			// Most Hibernate modules declare OSGi metadata through blueprints, so we need this feature
+			feature 'aries-blueprint'
 		}
 		// NOTE : would like to include spatial as well, but we need to wait for
 		//		it to not define dependency on postgresql driver
-		hibernateEnvers {
+		feature {
 			name = 'hibernate-envers'
 			description = 'Feature for easily adding Envers support to hibernate-orm'
-			dependencyFeatureNames = ['hibernate-orm']
-			projects = [rootProject.childProjects.'hibernate-envers']
-			bundle {
-				match group: 'org.hibernate', module: 'hibernate-core'
-				include = false
-			}
-			bundle {
-				match group: 'org.hibernate', module: 'hibernate-osgi'
-				include = false
-			}
-			bundle {
-				match group: 'org.hibernate', module: 'hibernate-entitymanager'
-				include = false
-			}
-			bundle {
-				match group: 'org.jboss.logging', module: 'jboss-logging'
-				include = false
-			}
-			bundle {
-				match group: 'org.jboss.logging', module: 'jboss-logging-annotations'
-				include = false
-			}
-			bundle {
-				match group: 'org.jboss.logging', module: 'jboss-logging-processor'
-				include = false
+			includeProject = false
+			configurations 'hibernateEnvers'
+			feature('hibernate-orm') {
+				version = project.version
 			}
 		}
-		hibernateInfinispan {
-			name = 'hibernate-infinispan'
-			description = 'Feature for easily adding Infinispan-based caching support to hibernate-orm'
-			dependencyFeatureNames = ['hibernate-orm']
-			projects = [rootProject.childProjects.'hibernate-infinispan']
-			bundle {
-				match group: 'org.hibernate', module: 'hibernate-core'
-				include = false
-			}
-			bundle {
-				match group: 'org.hibernate', module: 'hibernate-osgi'
-				include = false
-			}
-			bundle {
-				match group: 'org.jboss.logging', module: 'jboss-logging'
-				include = false
-			}
-			bundle {
-				match group: 'org.jboss.logging', module: 'jboss-logging-annotations'
-				include = false
-			}
-			bundle {
-				match group: 'org.jboss.logging', module: 'jboss-logging-processor'
-				include = false
-			}
-			bundle {
-				match group: 'org.jboss.spec.javax.transaction', module: 'jboss-transaction-api_1.1_spec'
-				include = false
-			}
-			bundle {
-				match {
-					group = 'org.infinispan'
-					module = 'infinispan-commons'
-				}
-				dependency = true
-			}
-			bundle {
-				match {
-					group = 'org.jgroups'
-					module = 'jgroups'
-				}
-				dependency = true
-			}
-		}
-		hibernateEhcache {
-			name = 'hibernate-ehcache'
-			description = 'Feature for easily adding Ehcache-based caching support to hibernate-orm'
-			dependencyFeatureNames = ['hibernate-orm']
-			projects = [rootProject.childProjects.'hibernate-ehcache']
-			bundle {
-				match group: 'org.hibernate', module: 'hibernate-core'
-				include = false
-			}
-			bundle {
-				match group: 'org.hibernate', module: 'hibernate-osgi'
-				include = false
-			}
-			bundle {
-				match group: 'org.jboss.logging', module: 'jboss-logging'
-				include = false
-			}
-			bundle {
-				match group: 'org.jboss.logging', module: 'jboss-logging-annotations'
-				include = false
-			}
-			bundle {
-				match group: 'org.jboss.logging', module: 'jboss-logging-processor'
-				include = false
-			}
-			bundle {
-				match {
-					group = 'net.sf.ehcache'
-					module = 'ehcache'
-				}
-				dependency = true
-			}
-		}
+		// The hibernate-infinispan feature is now provided by the Infinispan project.
 	}
 }
 
@@ -364,7 +220,7 @@ task generatePaxExamEnvironmentFile {
 		properties.setProperty( 'org.ops4j.pax.exam.container.karaf.version', karafVersion as String )
 		properties.setProperty( 'org.ops4j.pax.exam.container.karaf.probe.classesDir', sourceSets.test.output.classesDir.absolutePath )
 		properties.setProperty( 'org.ops4j.pax.exam.container.karaf.probe.resourcesDir', sourceSets.test.output.resourcesDir.absolutePath )
-		properties.setProperty( 'org.hibernate.osgi.test.karafFeatureFile', karafFeatures.featuresXmlFile.absolutePath )
+		properties.setProperty( 'org.hibernate.osgi.test.karafFeatureFile', karaf.features.outputFile.absolutePath )
 
 		outputFile.parentFile.mkdirs()
 
@@ -378,7 +234,7 @@ task generatePaxExamEnvironmentFile {
 	}
 }
 
-tasks.test.dependsOn tasks.generateKarafFeatures
+tasks.test.dependsOn tasks.generateFeatures
 tasks.test.dependsOn tasks.jar
 tasks.test.dependsOn tasks.generateDependsFile
 tasks.test.dependsOn tasks.generatePaxExamEnvironmentFile
@@ -391,16 +247,11 @@ tasks.test.dependsOn tasks.publishToMavenLocal
 
 publishing {
 	publications {
-		mavenJava( MavenPublication ) {
-			artifact( project.extensions.karafFeatures.featuresXmlFile ) {
+		publishedArtifacts( MavenPublication ) {
+			artifact( project.extensions.karaf.features.outputFile ) {
 				classifier 'karaf'
-				builtBy generateKarafFeatures
+				builtBy generateFeatures
 			}
 		}
 	}
-}
-
-if ( JavaVersion.current().isJava9Compatible() ) {
-	// Hikari CP relies on Javassist which we know has issues with Java 9
-	test.enabled = false
 }

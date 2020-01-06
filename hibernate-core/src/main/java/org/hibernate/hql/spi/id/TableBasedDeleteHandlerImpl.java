@@ -17,7 +17,6 @@ import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.hql.internal.ast.HqlSqlWalker;
 import org.hibernate.hql.internal.ast.tree.DeleteStatement;
 import org.hibernate.hql.internal.ast.tree.FromElement;
-import org.hibernate.internal.util.StringHelper;
 import org.hibernate.param.ParameterSpecification;
 import org.hibernate.persister.collection.AbstractCollectionPersister;
 import org.hibernate.persister.entity.Queryable;
@@ -88,7 +87,7 @@ public class TableBasedDeleteHandlerImpl
 	private String generateDelete(String tableName, String[] columnNames, String idSubselect, String comment) {
 		final Delete delete = new Delete()
 				.setTableName( tableName )
-				.setWhere( "(" + StringHelper.join( ", ", columnNames ) + ") IN (" + idSubselect + ")" );
+				.setWhere( "(" + String.join( ", ", columnNames ) + ") IN (" + idSubselect + ")" );
 		if ( factory().getSessionFactoryOptions().isCommentsEnabled() ) {
 			delete.setComment( comment );
 		}
@@ -114,10 +113,10 @@ public class TableBasedDeleteHandlerImpl
 			try {
 				try {
 					ps = session.getJdbcCoordinator().getStatementPreparer().prepareStatement( idInsertSelect, false );
-					int pos = 1;
-					pos += handlePrependedParametersOnIdSelection( ps, session, pos );
+					int position = 1;
+					position += handlePrependedParametersOnIdSelection( ps, session, position );
 					for ( ParameterSpecification parameterSpecification : idSelectParameterSpecifications ) {
-						pos += parameterSpecification.bind( ps, queryParameters, session, pos );
+						position += parameterSpecification.bind( ps, queryParameters, session, position );
 					}
 					resultCount = session.getJdbcCoordinator().getResultSetReturn().executeUpdate( ps );
 				}

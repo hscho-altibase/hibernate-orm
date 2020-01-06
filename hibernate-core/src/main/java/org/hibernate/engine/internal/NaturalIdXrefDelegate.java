@@ -15,11 +15,13 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.hibernate.AssertionFailure;
-import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
+import org.hibernate.cache.spi.access.NaturalIdDataAccess;
 import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.stat.internal.StatsHelper;
+import org.hibernate.stat.spi.StatisticsImplementor;
 import org.hibernate.type.Type;
 
 import org.jboss.logging.Logger;
@@ -107,7 +109,7 @@ public class NaturalIdXrefDelegate {
 		}
 
 		if ( persister.hasNaturalIdCache() ) {
-			final NaturalIdRegionAccessStrategy naturalIdCacheAccessStrategy = persister
+			final NaturalIdDataAccess naturalIdCacheAccessStrategy = persister
 					.getNaturalIdCacheAccessStrategy();
 			final Object naturalIdCacheKey = naturalIdCacheAccessStrategy.generateCacheKey( naturalIdValues, persister, session() );
 			naturalIdCacheAccessStrategy.evict( naturalIdCacheKey );
@@ -238,16 +240,22 @@ public class NaturalIdXrefDelegate {
 		}
 
 		// Try resolution from second-level cache
-		final NaturalIdRegionAccessStrategy naturalIdCacheAccessStrategy = persister.getNaturalIdCacheAccessStrategy();
-		final Object naturalIdCacheKey = naturalIdCacheAccessStrategy.generateCacheKey( naturalIdValues, persister, session() );
+		final NaturalIdDataAccess naturalIdCacheAccessStrategy = persister.getNaturalIdCacheAccessStrategy();
+		final SharedSessionContractImplementor session = session();
+		final Object naturalIdCacheKey = naturalIdCacheAccessStrategy.generateCacheKey( naturalIdValues, persister,
+																						session
+		);
 
-		pk = CacheHelper.fromSharedCache( session(), naturalIdCacheKey, naturalIdCacheAccessStrategy );
+		pk = CacheHelper.fromSharedCache( session, naturalIdCacheKey, naturalIdCacheAccessStrategy );
 
 		// Found in second-level cache, store in session cache
-		final SessionFactoryImplementor factory = session().getFactory();
+		final SessionFactoryImplementor factory = session.getFactory();
+		final StatisticsImplementor statistics = factory.getStatistics();
+		final boolean statisticsEnabled = statistics.isStatisticsEnabled();
 		if ( pk != null ) {
-			if ( factory.getStatistics().isStatisticsEnabled() ) {
-				factory.getStatisticsImplementor().naturalIdCacheHit(
+			if ( statisticsEnabled ) {
+				statistics.naturalIdCacheHit(
+						StatsHelper.INSTANCE.getRootEntityRole( persister ),
 						naturalIdCacheAccessStrategy.getRegion().getName()
 				);
 			}
@@ -273,8 +281,11 @@ public class NaturalIdXrefDelegate {
 			entityNaturalIdResolutionCache.pkToNaturalIdMap.put( pk, cachedNaturalId );
 			entityNaturalIdResolutionCache.naturalIdToPkMap.put( cachedNaturalId, pk );
 		}
-		else if ( factory.getStatistics().isStatisticsEnabled() ) {
-			factory.getStatisticsImplementor().naturalIdCacheMiss( naturalIdCacheAccessStrategy.getRegion().getName() );
+		else if ( statisticsEnabled ) {
+			statistics.naturalIdCacheMiss(
+					StatsHelper.INSTANCE.getRootEntityRole( persister ),
+					naturalIdCacheAccessStrategy.getRegion().getName()
+			);
 		}
 
 		return pk;
@@ -310,7 +321,7 @@ public class NaturalIdXrefDelegate {
 
 	/**
 	 * As part of "load synchronization process", if a particular natural id is found to have changed we need to track
-	 * its invalidity until afterQuery the next flush.  This method lets the "load synchronization process" indicate
+	 * its invalidity until after the next flush.  This method lets the "load synchronization process" indicate
 	 * when it has encountered such changes.
 	 *
 	 * @param persister The persister representing the entity type.
@@ -331,7 +342,7 @@ public class NaturalIdXrefDelegate {
 
 	/**
 	 * Again, as part of "load synchronization process" we need to also be able to clear references to these
-	 * known-invalid natural-ids afterQuery flush.  This method exposes that capability.
+	 * known-invalid natural-ids after flush.  This method exposes that capability.
 	 */
 	public void unStashInvalidNaturalIdReferences() {
 		for ( NaturalIdResolutionCache naturalIdResolutionCache : naturalIdResolutionCacheMap.values() ) {
@@ -411,22 +422,14 @@ public class NaturalIdXrefDelegate {
 	 */
 	private static class NaturalIdResolutionCache implements Serializable {
 		private final EntityPersister persister;
-		private final Type[] naturalIdTypes;
 
-		private Map<Serializable, CachedNaturalId> pkToNaturalIdMap = new ConcurrentHashMap<Serializable, CachedNaturalId>();
-		private Map<CachedNaturalId, Serializable> naturalIdToPkMap = new ConcurrentHashMap<CachedNaturalId, Serializable>();
+		private Map<Serializable, CachedNaturalId> pkToNaturalIdMap = new ConcurrentHashMap<>();
+		private Map<CachedNaturalId, Serializable> naturalIdToPkMap = new ConcurrentHashMap<>();
 
 		private List<CachedNaturalId> invalidNaturalIdList;
 
 		private NaturalIdResolutionCache(EntityPersister persister) {
 			this.persister = persister;
-
-			final int[] naturalIdPropertyIndexes = persister.getNaturalIdentifierProperties();
-			naturalIdTypes = new Type[ naturalIdPropertyIndexes.length ];
-			int i = 0;
-			for ( int naturalIdPropertyIndex : naturalIdPropertyIndexes ) {
-				naturalIdTypes[i++] = persister.getPropertyType( persister.getPropertyNames()[ naturalIdPropertyIndex ] );
-			}
 		}
 
 		public EntityPersister getPersister() {
@@ -467,7 +470,7 @@ public class NaturalIdXrefDelegate {
 
 		public void stashInvalidNaturalIdReference(Object[] invalidNaturalIdValues) {
 			if ( invalidNaturalIdList == null ) {
-				invalidNaturalIdList = new ArrayList<CachedNaturalId>();
+				invalidNaturalIdList = new ArrayList<>();
 			}
 			invalidNaturalIdList.add( new CachedNaturalId( persister, invalidNaturalIdValues ) );
 		}

@@ -88,6 +88,11 @@ public interface EnversSettings {
 	String REVISION_TYPE_FIELD_NAME = "org.hibernate.envers.revision_type_field_name";
 
 	/**
+	 * Original id property name name. Defaults to {@literal originalId}.
+	 */
+	String ORIGINAL_ID_PROP_NAME = "org.hibernate.envers.original_id_prop_name";
+
+	/**
 	 * Column name that will hold the end revision number in audit entities. Defaults to {@literal REVEND}.
 	 */
 	String AUDIT_STRATEGY_VALIDITY_END_REV_FIELD_NAME = "org.hibernate.envers.audit_strategy_validity_end_rev_field_name";
@@ -114,4 +119,27 @@ public interface EnversSettings {
 	 * Exactly one row with {@code null} end date exists for each identifier.
 	 */
 	String ALLOW_IDENTIFIER_REUSE = "org.hibernate.envers.allow_identifier_reuse";
+
+	/**
+	 * Forces {@code AuditReader#find} implementations that accept a revision-number argument to perform an exact
+	 * match against the supplied revision number rather than potentially returning hits that are less-than or
+	 * equal-to the supplied revision number.
+	 *
+	 * This option is meant to maintain backward compatibility while attempting to correct a bug in behavior without
+	 * impacting existing users who may use the current behavior.
+	 * 
+	 * Defaults to {@literal false}.
+	 *
+	 * @since 5.4.4
+	 */
+	String FIND_BY_REVISION_EXACT_MATCH = "org.hibernate.envers.find_by_revision_exact_match";
+
+	/**
+	 * Specifies the {@link org.hibernate.envers.boot.spi.ModifiedColumnNamingStrategy} to use
+	 *
+	 * Defaults to {@link org.hibernate.envers.boot.internal.LegacyModifiedColumnNamingStrategy}.
+	 *
+	 * @since 5.4.7
+	 */
+	String MODIFIED_COLUMN_NAMING_STRATEGY = "org.hibernate.envers.modified_column_naming_strategy";
 }

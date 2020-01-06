@@ -6,17 +6,22 @@
  */
 package org.hibernate;
 
+import java.io.Closeable;
 import java.io.Serializable;
 import java.sql.Connection;
+import java.util.List;
+import javax.persistence.EntityGraph;
 import javax.persistence.EntityManager;
 import javax.persistence.FlushModeType;
 import javax.persistence.criteria.CriteriaDelete;
 import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.CriteriaUpdate;
 
+import org.hibernate.graph.RootGraph;
 import org.hibernate.jdbc.ReturningWork;
 import org.hibernate.jdbc.Work;
 import org.hibernate.jpa.HibernateEntityManager;
+import org.hibernate.query.NativeQuery;
 import org.hibernate.stat.SessionStatistics;
 
 /**
@@ -73,14 +78,14 @@ import org.hibernate.stat.SessionStatistics;
  * <br>
  * If the <tt>Session</tt> throws an exception, the transaction must be rolled back
  * and the session discarded. The internal state of the <tt>Session</tt> might not
- * be consistent with the database afterQuery the exception occurs.
+ * be consistent with the database after the exception occurs.
  *
  * @see SessionFactory
  *
  * @author Gavin King
  * @author Steve Ebersole
  */
-public interface Session extends SharedSessionContract, EntityManager, HibernateEntityManager, AutoCloseable {
+public interface Session extends SharedSessionContract, EntityManager, HibernateEntityManager, AutoCloseable, Closeable {
 	/**
 	 * Obtain a {@link Session} builder with the ability to grab certain information from this session.
 	 *
@@ -90,7 +95,7 @@ public interface Session extends SharedSessionContract, EntityManager, Hibernate
 
 	/**
 	 * Force this session to flush. Must be called at the end of a
-	 * unit of work, beforeQuery committing the transaction and closing the
+	 * unit of work, before committing the transaction and closing the
 	 * session (depending on {@link #setFlushMode(FlushMode)},
 	 * {@link Transaction#commit()} calls this method).
 	 * <p/>
@@ -601,8 +606,8 @@ public interface Session extends SharedSessionContract, EntityManager, Hibernate
 	 * For example
 	 * <ul>
 	 * <li>where a database trigger alters the object state upon insert or update
-	 * <li>afterQuery executing direct SQL (eg. a mass update) in the same session
-	 * <li>afterQuery inserting a <tt>Blob</tt> or <tt>Clob</tt>
+	 * <li>after executing direct SQL (eg. a mass update) in the same session
+	 * <li>after inserting a <tt>Blob</tt> or <tt>Clob</tt>
 	 * </ul>
 	 *
 	 * @param object a persistent or detached instance
@@ -616,8 +621,8 @@ public interface Session extends SharedSessionContract, EntityManager, Hibernate
 	 * For example
 	 * <ul>
 	 * <li>where a database trigger alters the object state upon insert or update
-	 * <li>afterQuery executing direct SQL (eg. a mass update) in the same session
-	 * <li>afterQuery inserting a <tt>Blob</tt> or <tt>Clob</tt>
+	 * <li>after executing direct SQL (eg. a mass update) in the same session
+	 * <li>after inserting a <tt>Blob</tt> or <tt>Clob</tt>
 	 * </ul>
 	 *
 	 * @param entityName a persistent class
@@ -681,8 +686,11 @@ public interface Session extends SharedSessionContract, EntityManager, Hibernate
 	 * @param queryString a Hibernate query fragment.
 	 *
 	 * @return The query instance for manipulation and execution
+	 *
+	 * @deprecated (since 5.3) with no real replacement.
 	 */
-	org.hibernate.query.Query createFilter(Object collection, String queryString);
+	@Deprecated
+	org.hibernate.Query createFilter(Object collection, String queryString);
 
 	/**
 	 * Completely clear the session. Evict all loaded instances and cancel all pending
@@ -837,7 +845,7 @@ public interface Session extends SharedSessionContract, EntityManager, Hibernate
 	<T> IdentifierLoadAccess<T> byId(Class<T> entityClass);
 
 	/**
-	 * Create an {@link NaturalIdLoadAccess} instance to retrieve the specified entity by
+	 * Create a {@link NaturalIdLoadAccess} instance to retrieve the specified entity by
 	 * its natural id.
 	 * 
 	 * @param entityName The entity name of the entity type to be retrieved
@@ -849,7 +857,7 @@ public interface Session extends SharedSessionContract, EntityManager, Hibernate
 	NaturalIdLoadAccess byNaturalId(String entityName);
 
 	/**
-	 * Create an {@link NaturalIdLoadAccess} instance to retrieve the specified entity by
+	 * Create a {@link NaturalIdLoadAccess} instance to retrieve the specified entity by
 	 * its natural id.
 	 * 
 	 * @param entityClass The entity type to be retrieved
@@ -861,7 +869,7 @@ public interface Session extends SharedSessionContract, EntityManager, Hibernate
 	<T> NaturalIdLoadAccess<T> byNaturalId(Class<T> entityClass);
 
 	/**
-	 * Create an {@link SimpleNaturalIdLoadAccess} instance to retrieve the specified entity by
+	 * Create a {@link SimpleNaturalIdLoadAccess} instance to retrieve the specified entity by
 	 * its natural id.
 	 *
 	 * @param entityName The entity name of the entity type to be retrieved
@@ -874,7 +882,7 @@ public interface Session extends SharedSessionContract, EntityManager, Hibernate
 	SimpleNaturalIdLoadAccess bySimpleNaturalId(String entityName);
 
 	/**
-	 * Create an {@link SimpleNaturalIdLoadAccess} instance to retrieve the specified entity by
+	 * Create a {@link SimpleNaturalIdLoadAccess} instance to retrieve the specified entity by
 	 * its simple (single attribute) natural id.
 	 *
 	 * @param entityClass The entity type to be retrieved
@@ -972,6 +980,21 @@ public interface Session extends SharedSessionContract, EntityManager, Hibernate
 	 * @throws HibernateException Generally indicates wrapped {@link java.sql.SQLException}
 	 */
 	<T> T doReturningWork(ReturningWork<T> work) throws HibernateException;
+
+	@Override
+	<T> RootGraph<T> createEntityGraph(Class<T> rootType);
+
+	@Override
+	RootGraph<?> createEntityGraph(String graphName);
+
+	@Override
+	RootGraph<?> getEntityGraph(String graphName);
+
+	@Override
+	@SuppressWarnings({"unchecked", "RedundantCast"})
+	default <T> List<EntityGraph<? super T>> getEntityGraphs(Class<T> entityClass) {
+		return (List) getSessionFactory().findEntityGraphsByType( entityClass );
+	}
 
 	/**
 	 * Disconnect the session from its underlying JDBC connection.  This is intended for use in cases where the
@@ -1139,19 +1162,23 @@ public interface Session extends SharedSessionContract, EntityManager, Hibernate
 	void addEventListeners(SessionEventListener... listeners);
 
 	@Override
-	org.hibernate.query.Query createQuery(String queryString);
-
-	@Override
 	<T> org.hibernate.query.Query<T> createQuery(String queryString, Class<T> resultType);
 
+	// Override the JPA return type with the one exposed in QueryProducer
 	@Override
 	<T> org.hibernate.query.Query<T> createQuery(CriteriaQuery<T> criteriaQuery);
 
+	// Override the JPA return type with the one exposed in QueryProducer
 	@Override
 	org.hibernate.query.Query createQuery(CriteriaUpdate updateQuery);
 
+	// Override the JPA return type with the one exposed in QueryProducer
 	@Override
 	org.hibernate.query.Query createQuery(CriteriaDelete deleteQuery);
 
+
 	<T> org.hibernate.query.Query<T> createNamedQuery(String name, Class<T> resultType);
+
+	@Override
+	NativeQuery createSQLQuery(String queryString);
 }

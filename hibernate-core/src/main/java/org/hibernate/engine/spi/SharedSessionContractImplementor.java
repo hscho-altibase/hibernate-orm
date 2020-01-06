@@ -12,6 +12,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 import javax.persistence.FlushModeType;
+import javax.persistence.TransactionRequiredException;
+import javax.persistence.criteria.Selection;
 
 import org.hibernate.CacheMode;
 import org.hibernate.Criteria;
@@ -21,13 +23,18 @@ import org.hibernate.Interceptor;
 import org.hibernate.ScrollMode;
 import org.hibernate.SharedSessionContract;
 import org.hibernate.Transaction;
+import org.hibernate.cache.spi.CacheTransactionSynchronization;
+import org.hibernate.cfg.Environment;
 import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.engine.jdbc.LobCreationContext;
 import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
 import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.engine.query.spi.sql.NativeSQLQuerySpecification;
+import org.hibernate.internal.util.config.ConfigurationHelper;
+import org.hibernate.jpa.spi.HibernateEntityManagerImplementor;
 import org.hibernate.loader.custom.CustomQuery;
 import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.query.spi.QueryImplementor;
 import org.hibernate.query.spi.QueryProducerImplementor;
 import org.hibernate.query.spi.ScrollableResultsImplementor;
 import org.hibernate.resource.jdbc.spi.JdbcSessionOwner;
@@ -84,7 +91,13 @@ public interface SharedSessionContractImplementor
 	SessionEventListenerManager getEventListenerManager();
 
 	/**
-	 * Get the persistence context for this session
+	 * Get the persistence context for this session.
+	 * See also {@link #getPersistenceContextInternal()} for
+	 * an alternative.
+	 *
+	 * This method is not extremely fast: if you need to access
+	 * the PersistenceContext multiple times, prefer keeping
+	 * a reference to it over invoking this method multiple times.
 	 */
 	PersistenceContext getPersistenceContext();
 
@@ -117,6 +130,15 @@ public interface SharedSessionContractImplementor
 	boolean isClosed();
 
 	/**
+	 * Checks whether the session is open or is waiting for auto-close
+	 *
+	 * @return {@code true} if the session is closed or if it's waiting for auto-close; {@code false} otherwise.
+	 */
+	default boolean isOpenOrWaitingForAutoClose() {
+		return !isClosed();
+	}
+
+	/**
 	 * Performs a check whether the Session is open, and if not:<ul>
 	 *     <li>marks current transaction (if one) for rollback only</li>
 	 *     <li>throws an IllegalStateException (JPA defines the exception type)</li>
@@ -140,15 +162,45 @@ public interface SharedSessionContractImplementor
 	void markForRollbackOnly();
 
 	/**
-	 * System time beforeQuery the start of the transaction
+	 * A "timestamp" at or before the start of the current transaction.
+	 *
+	 * @apiNote This "timestamp" need not be related to timestamp in the Java Date/millisecond
+	 * sense.  It just needs to be an incrementing value.  See
+	 * {@link CacheTransactionSynchronization#getCurrentTransactionStartTimestamp()}
 	 */
-	long getTimestamp();
+	long getTransactionStartTimestamp();
+
+	/**
+	 * @deprecated (since 5.3) Use {@link #getTransactionStartTimestamp()} instead.
+	 */
+	@Deprecated
+	default long getTimestamp() {
+		return getTransactionStartTimestamp();
+	}
+
+	/**
+	 * The current CacheTransactionContext associated with the Session.  This may
+	 * return {@code null} when the Session is not currently part of a transaction.
+	 */
+	CacheTransactionSynchronization getCacheTransactionSynchronization();
 
 	/**
 	 * Does this <tt>Session</tt> have an active Hibernate transaction
 	 * or is there a JTA transaction in progress?
 	 */
 	boolean isTransactionInProgress();
+
+	/**
+	 * Check if an active Transaction is necessary for the update operation to be executed.
+	 * If an active Transaction is necessary but it is not then a TransactionRequiredException is raised.
+	 *
+	 * @param exceptionMessage, the message to use for the TransactionRequiredException
+	 */
+	default void checkTransactionNeededForUpdateOperation(String exceptionMessage) {
+		if ( !isTransactionInProgress() ) {
+			throw new TransactionRequiredException( exceptionMessage );
+		}
+	}
 
 	/**
 	 * Provides access to the underlying transaction or creates a new transaction if
@@ -177,7 +229,7 @@ public interface SharedSessionContractImplementor
 	Interceptor getInterceptor();
 
 	/**
-	 * Enable/disable automatic cache clearing from afterQuery transaction
+	 * Enable/disable automatic cache clearing from after transaction
 	 * completion (for EJB3)
 	 */
 	void setAutoClear(boolean enabled);
@@ -208,6 +260,7 @@ public interface SharedSessionContractImplementor
 	 * Do not return the proxy.
 	 */
 	Object immediateLoad(String entityName, Serializable id) throws HibernateException;
+
 
 	/**
 	 * Execute a <tt>find()</tt> query
@@ -399,6 +452,10 @@ public interface SharedSessionContractImplementor
 
 	boolean isAutoCloseSessionEnabled();
 
+	default boolean isQueryParametersValidationEnabled(){
+		return getFactory().getSessionFactoryOptions().isQueryParametersValidationEnabled();
+	}
+
 	/**
 	 * Get the load query influencers associated with this session.
 	 *
@@ -407,5 +464,62 @@ public interface SharedSessionContractImplementor
 	 */
 	LoadQueryInfluencers getLoadQueryInfluencers();
 
+	/**
+	 * The converter associated to a Session might be lazily initialized: only invoke
+	 * this getter when there is actual need to use it.
+	 *
+	 * @return the ExceptionConverter for this Session.
+	 */
 	ExceptionConverter getExceptionConverter();
+
+	/**
+	 * Get the currently configured JDBC batch size either at the Session-level or SessionFactory-level.
+	 *
+	 * If the Session-level JDBC batch size was not configured, return the SessionFactory-level one.
+	 *
+	 * @return Session-level or or SessionFactory-level JDBC batch size.
+	 *
+	 * @since 5.2
+	 *
+	 * @see org.hibernate.boot.spi.SessionFactoryOptions#getJdbcBatchSize
+	 * @see org.hibernate.boot.SessionFactoryBuilder#applyJdbcBatchSize
+	 */
+	default Integer getConfiguredJdbcBatchSize() {
+		final Integer sessionJdbcBatchSize = getJdbcBatchSize();
+
+		return sessionJdbcBatchSize == null ?
+			ConfigurationHelper.getInt(
+					Environment.STATEMENT_BATCH_SIZE,
+					getFactory().getProperties(),
+					1
+			) :
+			sessionJdbcBatchSize;
+	}
+
+	/**
+	 * @deprecated (since 5.2) - see deprecation note on
+	 * org.hibernate.jpa.spi.HibernateEntityManagerImplementor#createQuery(java.lang.String, java.lang.Class, javax.persistence.criteria.Selection, org.hibernate.jpa.spi.HibernateEntityManagerImplementor.QueryOptions)
+	 * @return The typed query
+	 */
+	@Deprecated
+	<T> QueryImplementor<T> createQuery(
+			String jpaqlString,
+			Class<T> resultClass,
+			Selection selection,
+			HibernateEntityManagerImplementor.QueryOptions queryOptions);
+
+	/**
+	 * This is similar to {@link #getPersistenceContext()}, with
+	 * two main differences:
+	 * a) this version performs better as
+	 * it allows for inlining and probably better prediction
+	 * b) see SessionImpl{@link #getPersistenceContext()} : it
+	 * does some checks on the current state of the Session.
+	 *
+	 * Choose wisely: performance is important, correctness comes first.
+	 *
+	 * @return the PersistenceContext associated to this session.
+	 */
+	PersistenceContext getPersistenceContextInternal();
+
 }

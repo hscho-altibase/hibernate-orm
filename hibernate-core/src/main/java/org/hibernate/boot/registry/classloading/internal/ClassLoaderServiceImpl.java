@@ -6,20 +6,19 @@
  */
 package org.hibernate.boot.registry.classloading.internal;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.net.URL;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -39,7 +38,9 @@ public class ClassLoaderServiceImpl implements ClassLoaderService {
 
 	private static final CoreMessageLogger log = CoreLogging.messageLogger( ClassLoaderServiceImpl.class );
 
-	private final ConcurrentMap<Class, ServiceLoader> serviceLoaders = new ConcurrentHashMap<Class, ServiceLoader>();
+	private static final String CLASS_PATH_SCHEME = "classpath://";
+
+	private final ConcurrentMap<Class, AggregatedServiceLoader<?>> serviceLoaders = new ConcurrentHashMap<>();
 	private volatile AggregatedClassLoader aggregatedClassLoader;
 
 	/**
@@ -55,15 +56,16 @@ public class ClassLoaderServiceImpl implements ClassLoaderService {
 	 * @param classLoader The ClassLoader to use
 	 */
 	public ClassLoaderServiceImpl(ClassLoader classLoader) {
-		this( Collections.singletonList( classLoader ) );
+		this( Collections.singletonList( classLoader ),TcclLookupPrecedence.AFTER );
 	}
 
 	/**
 	 * Constructs a ClassLoaderServiceImpl with the given ClassLoader instances
 	 *
 	 * @param providedClassLoaders The ClassLoader instances to use
+	 * @param lookupPrecedence The lookup precedence of the thread context {@code ClassLoader}
 	 */
-	public ClassLoaderServiceImpl(Collection<ClassLoader> providedClassLoaders) {
+	public ClassLoaderServiceImpl(Collection<ClassLoader> providedClassLoaders, TcclLookupPrecedence lookupPrecedence) {
 		final LinkedHashSet<ClassLoader> orderedClassLoaderSet = new LinkedHashSet<ClassLoader>();
 
 		// first, add all provided class loaders, if any
@@ -79,19 +81,12 @@ public class ClassLoaderServiceImpl implements ClassLoaderService {
 		// then the Hibernate class loader
 		orderedClassLoaderSet.add( ClassLoaderServiceImpl.class.getClassLoader() );
 
-		// then the TCCL, if one...
-		final ClassLoader tccl = locateTCCL();
-		if ( tccl != null ) {
-			orderedClassLoaderSet.add( tccl );
-		}
-		// finally the system classloader
-		final ClassLoader sysClassLoader = locateSystemClassLoader();
-		if ( sysClassLoader != null ) {
-			orderedClassLoaderSet.add( sysClassLoader );
-		}
-
 		// now build the aggregated class loader...
-		this.aggregatedClassLoader = new AggregatedClassLoader( orderedClassLoaderSet );
+		this.aggregatedClassLoader = AccessController.doPrivileged( new PrivilegedAction<AggregatedClassLoader>() {
+			public AggregatedClassLoader run() {
+				return new AggregatedClassLoader( orderedClassLoaderSet, lookupPrecedence );
+			}
+		} );
 	}
 
 	/**
@@ -110,9 +105,7 @@ public class ClassLoaderServiceImpl implements ClassLoaderService {
 
 		final Collection<ClassLoader> classLoaders = (Collection<ClassLoader>) configValues.get( AvailableSettings.CLASSLOADERS );
 		if ( classLoaders != null ) {
-			for ( ClassLoader classLoader : classLoaders ) {
-				providedClassLoaders.add( classLoader );
-			}
+			providedClassLoaders.addAll( classLoaders );
 		}
 
 		addIfSet( providedClassLoaders, AvailableSettings.APP_CLASSLOADER, configValues );
@@ -120,16 +113,7 @@ public class ClassLoaderServiceImpl implements ClassLoaderService {
 		addIfSet( providedClassLoaders, AvailableSettings.HIBERNATE_CLASSLOADER, configValues );
 		addIfSet( providedClassLoaders, AvailableSettings.ENVIRONMENT_CLASSLOADER, configValues );
 
-		if ( providedClassLoaders.isEmpty() ) {
-			log.debugf( "Incoming config yielded no classloaders; adding standard SE ones" );
-			final ClassLoader tccl = locateTCCL();
-			if ( tccl != null ) {
-				providedClassLoaders.add( tccl );
-			}
-			providedClassLoaders.add( ClassLoaderServiceImpl.class.getClassLoader() );
-		}
-
-		return new ClassLoaderServiceImpl( providedClassLoaders );
+		return new ClassLoaderServiceImpl( providedClassLoaders,TcclLookupPrecedence.AFTER );
 	}
 
 	private static void addIfSet(List<ClassLoader> providedClassLoaders, String name, Map configVales) {
@@ -137,86 +121,6 @@ public class ClassLoaderServiceImpl implements ClassLoaderService {
 		if ( providedClassLoader != null ) {
 			providedClassLoaders.add( providedClassLoader );
 		}
-	}
-
-	private static ClassLoader locateSystemClassLoader() {
-		try {
-			return ClassLoader.getSystemClassLoader();
-		}
-		catch (Exception e) {
-			return null;
-		}
-	}
-
-	private static ClassLoader locateTCCL() {
-		try {
-			return Thread.currentThread().getContextClassLoader();
-		}
-		catch (Exception e) {
-			return null;
-		}
-	}
-
-	private static class AggregatedClassLoader extends ClassLoader {
-		private final ClassLoader[] individualClassLoaders;
-
-		private AggregatedClassLoader(final LinkedHashSet<ClassLoader> orderedClassLoaderSet) {
-			super( null );
-			individualClassLoaders = orderedClassLoaderSet.toArray( new ClassLoader[orderedClassLoaderSet.size()] );
-		}
-
-		@Override
-		public Enumeration<URL> getResources(String name) throws IOException {
-			final LinkedHashSet<URL> resourceUrls = new LinkedHashSet<URL>();
-
-			for ( ClassLoader classLoader : individualClassLoaders ) {
-				final Enumeration<URL> urls = classLoader.getResources( name );
-				while ( urls.hasMoreElements() ) {
-					resourceUrls.add( urls.nextElement() );
-				}
-			}
-
-			return new Enumeration<URL>() {
-				final Iterator<URL> resourceUrlIterator = resourceUrls.iterator();
-
-				@Override
-				public boolean hasMoreElements() {
-					return resourceUrlIterator.hasNext();
-				}
-
-				@Override
-				public URL nextElement() {
-					return resourceUrlIterator.next();
-				}
-			};
-		}
-
-		@Override
-		protected URL findResource(String name) {
-			for ( ClassLoader classLoader : individualClassLoaders ) {
-				final URL resource = classLoader.getResource( name );
-				if ( resource != null ) {
-					return resource;
-				}
-			}
-			return super.findResource( name );
-		}
-
-		@Override
-		protected Class<?> findClass(String name) throws ClassNotFoundException {
-			for ( ClassLoader classLoader : individualClassLoaders ) {
-				try {
-					return classLoader.loadClass( name );
-				}
-				catch (Exception ignore) {
-				}
-				catch (LinkageError ignore) {
-				}
-			}
-
-			throw new ClassNotFoundException( "Could not load requested class : " + name );
-		}
-
 	}
 
 	@Override
@@ -241,6 +145,10 @@ public class ClassLoaderServiceImpl implements ClassLoaderService {
 		}
 		catch (Exception ignore) {
 		}
+
+		// if we couldn't find the resource containing a classpath:// prefix above, that means we don't have a URL
+		// handler for it. So let's remove the prefix and resolve against our class loader.
+		name = stripClasspathScheme( name );
 
 		try {
 			final URL url = getAggregatedClassLoader().getResource( name );
@@ -276,6 +184,10 @@ public class ClassLoaderServiceImpl implements ClassLoaderService {
 		}
 		catch (Exception ignore) {
 		}
+
+		// if we couldn't find the resource containing a classpath:// prefix above, that means we don't have a URL
+		// handler for it. So let's remove the prefix and resolve against our class loader.
+		name = stripClasspathScheme( name );
 
 		try {
 			log.tracef( "trying via [ClassLoader.getResourceAsStream(\"%s\")]", name );
@@ -331,16 +243,12 @@ public class ClassLoaderServiceImpl implements ClassLoaderService {
 	@Override
 	@SuppressWarnings("unchecked")
 	public <S> Collection<S> loadJavaServices(Class<S> serviceContract) {
-		ServiceLoader<S> serviceLoader = serviceLoaders.get( serviceContract );
+		AggregatedServiceLoader<S> serviceLoader = (AggregatedServiceLoader<S>) serviceLoaders.get( serviceContract );
 		if ( serviceLoader == null ) {
-			serviceLoader = ServiceLoader.load( serviceContract, getAggregatedClassLoader() );
+			serviceLoader = AggregatedServiceLoader.create( getAggregatedClassLoader(), serviceContract );
 			serviceLoaders.put( serviceContract, serviceLoader );
 		}
-		final LinkedHashSet<S> services = new LinkedHashSet<S>();
-		for ( S service : serviceLoader ) {
-			services.add( service );
-		}
-		return services;
+		return serviceLoader.getAll();
 	}
 
 	@Override
@@ -358,18 +266,30 @@ public class ClassLoaderServiceImpl implements ClassLoaderService {
 		return work.doWork( getAggregatedClassLoader() );
 	}
 
-	private ClassLoader getAggregatedClassLoader() {
-		final ClassLoader aggregated = this.aggregatedClassLoader;
+	private AggregatedClassLoader getAggregatedClassLoader() {
+		final AggregatedClassLoader aggregated = this.aggregatedClassLoader;
 		if ( aggregated == null ) {
 			throw log.usingStoppedClassLoaderService();
 		}
 		return aggregated;
 	}
 
+	private String stripClasspathScheme(String name) {
+		if ( name == null ) {
+			return null;
+		}
+
+		if ( name.startsWith( CLASS_PATH_SCHEME ) ) {
+			return name.substring( CLASS_PATH_SCHEME.length() );
+		}
+
+		return name;
+	}
+
 	@Override
 	public void stop() {
-		for ( ServiceLoader serviceLoader : serviceLoaders.values() ) {
-			serviceLoader.reload(); // clear service loader providers
+		for ( AggregatedServiceLoader<?> serviceLoader : serviceLoaders.values() ) {
+			serviceLoader.close();
 		}
 		serviceLoaders.clear();
 		//Avoid ClassLoader leaks

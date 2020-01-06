@@ -21,7 +21,7 @@ import org.hibernate.cfg.annotations.reflection.XMLContext;
 import org.hibernate.internal.util.xml.ErrorLogger;
 import org.hibernate.internal.util.xml.XMLHelper;
 
-import org.hibernate.testing.boot.ClassLoaderAccessTestingImpl;
+import org.hibernate.testing.boot.BootstrapContextImpl;
 import org.hibernate.testing.boot.ClassLoaderServiceTestingImpl;
 
 /**
@@ -30,8 +30,8 @@ import org.hibernate.testing.boot.ClassLoaderServiceTestingImpl;
 public class XMLContextTest {
 	@Test
 	public void testAll() throws Exception {
-		final XMLHelper xmlHelper = new XMLHelper( ClassLoaderServiceTestingImpl.INSTANCE );
-		final XMLContext context = new XMLContext( ClassLoaderAccessTestingImpl.INSTANCE );
+		final XMLHelper xmlHelper = new XMLHelper();
+		final XMLContext context = new XMLContext( BootstrapContextImpl.INSTANCE );
 
 		InputStream is = ClassLoaderServiceTestingImpl.INSTANCE.locateResourceStream(
 				"org/hibernate/test/annotations/reflection/orm.xml"

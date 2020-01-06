@@ -6,6 +6,9 @@
  */
 package org.hibernate.boot.registry.selector.internal;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -28,7 +31,7 @@ public class StrategySelectorImpl implements StrategySelector {
 	private static final Logger log = Logger.getLogger( StrategySelectorImpl.class );
 
 
-	public static StrategyCreator STANDARD_STRATEGY_CREATOR = strategyClass -> {
+	public static final StrategyCreator STANDARD_STRATEGY_CREATOR = strategyClass -> {
 		try {
 			return strategyClass.newInstance();
 		}
@@ -63,25 +66,29 @@ public class StrategySelectorImpl implements StrategySelector {
 
 		final Class old = namedStrategyImplementorMap.put( name, implementation );
 		if ( old == null ) {
-			log.trace(
-					String.format(
-							"Registering named strategy selector [%s] : [%s] -> [%s]",
-							strategy.getName(),
-							name,
-							implementation.getName()
-					)
-			);
+			if ( log.isTraceEnabled() ) {
+				log.trace(
+						String.format(
+								"Registering named strategy selector [%s] : [%s] -> [%s]",
+								strategy.getName(),
+								name,
+								implementation.getName()
+						)
+				);
+			}
 		}
 		else {
-			log.debug(
-					String.format(
-							"Registering named strategy selector [%s] : [%s] -> [%s] (replacing [%s])",
-							strategy.getName(),
-							name,
-							implementation.getName(),
-							old.getName()
-					)
-			);
+			if ( log.isDebugEnabled() ) {
+				log.debug(
+						String.format(
+								"Registering named strategy selector [%s] : [%s] -> [%s] (replacing [%s])",
+								strategy.getName(),
+								name,
+								implementation.getName(),
+								old.getName()
+						)
+				);
+			}
 		}
 	}
 
@@ -101,7 +108,7 @@ public class StrategySelectorImpl implements StrategySelector {
 			}
 		}
 
-		// try tp clean up afterQuery ourselves...
+		// try to clean up after ourselves...
 		if ( namedStrategyImplementorMap.isEmpty() ) {
 			namedStrategyImplementorByStrategyMap.remove( strategy );
 		}
@@ -123,7 +130,8 @@ public class StrategySelectorImpl implements StrategySelector {
 		}
 		catch (ClassLoadingException e) {
 			throw new StrategySelectionException(
-					"Unable to resolve name [" + name + "] as strategy [" + strategy.getName() + "]"
+					"Unable to resolve name [" + name + "] as strategy [" + strategy.getName() + "]",
+					e
 			);
 		}
 	}
@@ -164,6 +172,16 @@ public class StrategySelectorImpl implements StrategySelector {
 				(Callable<T>) () -> defaultValue,
 				creator
 		);
+	}
+
+	@Override
+	@SuppressWarnings("unchecked")
+	public Collection getRegisteredStrategyImplementors(Class strategy) {
+		final Map<String, Class> registrations = namedStrategyImplementorByStrategyMap.get( strategy );
+		if ( registrations == null ) {
+			return Collections.emptySet();
+		}
+		return new HashSet( registrations.values() );
 	}
 
 	@SuppressWarnings("unchecked")

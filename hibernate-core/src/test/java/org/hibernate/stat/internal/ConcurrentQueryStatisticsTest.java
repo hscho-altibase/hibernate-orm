@@ -12,14 +12,11 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
 /**
- * <code>ConcurrentQueryStatisticsTest</code> -
- *
  * @author Vlad Mihalcea
  */
 public class ConcurrentQueryStatisticsTest extends BaseUnitTestCase {
 
-	private ConcurrentQueryStatisticsImpl stats = new ConcurrentQueryStatisticsImpl(
-			"test" );
+	private QueryStatisticsImpl stats = new QueryStatisticsImpl( "test" );
 
 	@Test
 	public void testStats() {

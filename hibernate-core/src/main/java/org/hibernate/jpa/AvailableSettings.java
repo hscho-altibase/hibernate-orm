@@ -62,10 +62,10 @@ public interface AvailableSettings {
 	String JDBC_USER = org.hibernate.cfg.AvailableSettings.JPA_JDBC_USER;
 
 	/**
-	 * @deprecated (since 5.2) use {@link org.hibernate.cfg.AvailableSettings#JPA_JDBC_USER} instead
+	 * @deprecated (since 5.2) use {@link org.hibernate.cfg.AvailableSettings#JPA_JDBC_PASSWORD} instead
 	 */
 	@Deprecated
-	String JDBC_PASSWORD = org.hibernate.cfg.AvailableSettings.JPA_JDBC_USER;
+	String JDBC_PASSWORD = org.hibernate.cfg.AvailableSettings.JPA_JDBC_PASSWORD;
 
 	/**
 	 * @deprecated (since 5.2) use {@link org.hibernate.cfg.AvailableSettings#JPA_SHARED_CACHE_MODE} instead
@@ -187,11 +187,11 @@ public interface AvailableSettings {
 	String SCHEMA_GEN_SCRIPTS_DROP_TARGET = org.hibernate.cfg.AvailableSettings.HBM2DDL_SCRIPTS_DROP_TARGET;
 
 	/**
-	 * @deprecated (since 5.2) use {@link org.hibernate.cfg.AvailableSettings#HBM2DLL_CREATE_NAMESPACES}
-	 * or {@link org.hibernate.cfg.AvailableSettings#HBM2DLL_CREATE_SCHEMAS} instead
+	 * @deprecated (since 5.2) use {@link org.hibernate.cfg.AvailableSettings#HBM2DDL_CREATE_NAMESPACES}
+	 * or {@link org.hibernate.cfg.AvailableSettings#HBM2DDL_CREATE_SCHEMAS} instead
 	 */
 	@Deprecated
-	String SCHEMA_GEN_CREATE_SCHEMAS = org.hibernate.cfg.AvailableSettings.HBM2DLL_CREATE_NAMESPACES;
+	String SCHEMA_GEN_CREATE_SCHEMAS = org.hibernate.cfg.AvailableSettings.HBM2DDL_CREATE_NAMESPACES;
 
 	/**
 	 * @deprecated (since 5.2) use {@link org.hibernate.cfg.AvailableSettings#HBM2DDL_CONNECTION} instead
@@ -227,6 +227,27 @@ public interface AvailableSettings {
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// Hibernate specific settings
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+	/**
+	 * Setting that indicates whether to build the JPA types. Accepts
+	 * 3 values:<ul>
+	 *     <li>
+	 *         <b>enabled</b> - Do the build
+	 *     </li>
+	 *     <li>
+	 *         <b>disabled</b> - Do not so the build
+	 *     </li>
+	 *     <li>
+	 *         <b>ignoreUnsupported</b> - Do the build, but ignore any non-JPA features that would otherwise
+	 *         result in a failure.
+	 *     </li>
+	 * </ul>
+	 *
+	 * @deprecated use {@link org.hibernate.cfg.AvailableSettings#STATIC_METAMODEL_POPULATION} instead
+	 */
+	@Deprecated
+	String JPA_METAMODEL_POPULATION = "hibernate.ejb.metamodel.population";
 
 	/**
 	 * @deprecated (since 5.2) use {@link org.hibernate.cfg.AvailableSettings#INTERCEPTOR} instead

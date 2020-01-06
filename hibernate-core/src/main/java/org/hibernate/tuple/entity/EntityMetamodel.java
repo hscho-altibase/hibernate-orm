@@ -8,6 +8,7 @@ package org.hibernate.tuple.entity;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -18,13 +19,13 @@ import java.util.Set;
 import org.hibernate.EntityMode;
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
+import org.hibernate.bytecode.enhance.spi.interceptor.EnhancementHelper;
 import org.hibernate.bytecode.spi.BytecodeEnhancementMetadata;
 import org.hibernate.cfg.NotYetImplementedException;
 import org.hibernate.engine.OptimisticLockStyle;
 import org.hibernate.engine.spi.CascadeStyle;
 import org.hibernate.engine.spi.CascadeStyles;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.engine.spi.ValueInclusion;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.ReflectHelper;
 import org.hibernate.internal.util.collections.ArrayHelper;
@@ -92,7 +93,7 @@ public class EntityMetamodel implements Serializable {
 	private final InDatabaseValueGenerationStrategy[] inDatabaseValueGenerationStrategies;
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	private final Map<String, Integer> propertyIndexes = new HashMap<String, Integer>();
+	private final Map<String, Integer> propertyIndexes = new HashMap<>();
 	private final boolean hasCollections;
 	private final boolean hasMutableProperties;
 	private final boolean hasLazyProperties;
@@ -140,7 +141,30 @@ public class EntityMetamodel implements Serializable {
 		versioned = persistentClass.isVersioned();
 
 		if ( persistentClass.hasPojoRepresentation() ) {
-			bytecodeEnhancementMetadata = BytecodeEnhancementMetadataPojoImpl.from( persistentClass );
+			final Component identifierMapperComponent = persistentClass.getIdentifierMapper();
+			final CompositeType nonAggregatedCidMapper;
+			final Set<String> idAttributeNames;
+
+			if ( identifierMapperComponent != null ) {
+				nonAggregatedCidMapper = (CompositeType) identifierMapperComponent.getType();
+				idAttributeNames = new HashSet<>( );
+				//noinspection unchecked
+				final Iterator<Property> propertyItr = identifierMapperComponent.getPropertyIterator();
+				while ( propertyItr.hasNext() ) {
+					idAttributeNames.add( propertyItr.next().getName() );
+				}
+			}
+			else {
+				nonAggregatedCidMapper = null;
+				idAttributeNames = Collections.singleton( identifierAttribute.getName() );
+			}
+
+			bytecodeEnhancementMetadata = BytecodeEnhancementMetadataPojoImpl.from(
+					persistentClass,
+					idAttributeNames,
+					nonAggregatedCidMapper,
+					sessionFactory.getSessionFactoryOptions().isEnhancementAsProxyEnabled()
+			);
 		}
 		else {
 			bytecodeEnhancementMetadata = new BytecodeEnhancementMetadataNonPojoImpl( persistentClass.getEntityName() );
@@ -150,7 +174,7 @@ public class EntityMetamodel implements Serializable {
 
 		propertySpan = persistentClass.getPropertyClosureSpan();
 		properties = new NonIdentifierAttribute[propertySpan];
-		List<Integer> naturalIdNumbers = new ArrayList<Integer>();
+		List<Integer> naturalIdNumbers = new ArrayList<>();
 		// temporary ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 		propertyNames = new String[propertySpan];
 		propertyTypes = new Type[propertySpan];
@@ -181,8 +205,6 @@ public class EntityMetamodel implements Serializable {
 		boolean foundCollection = false;
 		boolean foundMutable = false;
 		boolean foundNonIdentifierPropertyNamedId = false;
-		boolean foundInsertGeneratedValue = false;
-		boolean foundUpdateGeneratedValue = false;
 		boolean foundUpdateableNaturalIdProperty = false;
 
 		while ( iter.hasNext() ) {
@@ -220,10 +242,16 @@ public class EntityMetamodel implements Serializable {
 			}
 
 			// temporary ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-			boolean lazy = prop.isLazy() && bytecodeEnhancementMetadata.isEnhancedForLazyLoading();
+			boolean lazy = ! EnhancementHelper.includeInBaseFetchGroup(
+					prop,
+					bytecodeEnhancementMetadata.isEnhancedForLazyLoading(),
+					sessionFactory.getSessionFactoryOptions().isEnhancementAsProxyEnabled()
+			);
+
 			if ( lazy ) {
 				hasLazy = true;
 			}
+
 			propertyLaziness[i] = lazy;
 
 			propertyNames[i] = properties[i].getName();
@@ -334,8 +362,11 @@ public class EntityMetamodel implements Serializable {
 				LOG.entityMappedAsNonAbstract(name);
 			}
 		}
+
 		selectBeforeUpdate = persistentClass.hasSelectBeforeUpdate();
-		dynamicUpdate = persistentClass.useDynamicUpdate();
+
+		dynamicUpdate = persistentClass.useDynamicUpdate()
+				|| ( getBytecodeEnhancementMetadata().isEnhancedForLazyLoading() && getBytecodeEnhancementMetadata().getLazyAttributesMetadata().getFetchGroupNames().size() > 1 );
 		dynamicInsert = persistentClass.useDynamicInsert();
 
 		polymorphic = persistentClass.isPolymorphic();
@@ -376,7 +407,7 @@ public class EntityMetamodel implements Serializable {
 		}
 
 		entityMode = persistentClass.hasPojoRepresentation() ? EntityMode.POJO : EntityMode.MAP;
-		final EntityTuplizerFactory entityTuplizerFactory = sessionFactory.getSettings().getEntityTuplizerFactory();
+		final EntityTuplizerFactory entityTuplizerFactory = sessionFactory.getSessionFactoryOptions().getEntityTuplizerFactory();
 		final String tuplizerClassName = persistentClass.getTuplizerImplClassName( entityMode );
 		if ( tuplizerClassName == null ) {
 			entityTuplizer = entityTuplizerFactory.constructDefaultTuplizer( entityMode, this, persistentClass );
@@ -511,10 +542,6 @@ public class EntityMetamodel implements Serializable {
 		public ValueGenerationStrategyException(String message) {
 			super( message );
 		}
-
-		public ValueGenerationStrategyException(String message, Throwable cause) {
-			super( message, cause );
-		}
 	}
 
 	private static class CompositeGenerationStrategyPairBuilder {
@@ -523,7 +550,6 @@ public class EntityMetamodel implements Serializable {
 		private boolean hadInMemoryGeneration;
 		private boolean hadInDatabaseGeneration;
 
-		private List<InMemoryValueGenerationStrategy> inMemoryStrategies;
 		private List<InDatabaseValueGenerationStrategy> inDatabaseStrategies;
 
 		public CompositeGenerationStrategyPairBuilder(Property mappingProperty) {
@@ -536,11 +562,6 @@ public class EntityMetamodel implements Serializable {
 		}
 
 		private void add(InMemoryValueGenerationStrategy inMemoryStrategy) {
-			if ( inMemoryStrategies == null ) {
-				inMemoryStrategies = new ArrayList<InMemoryValueGenerationStrategy>();
-			}
-			inMemoryStrategies.add( inMemoryStrategy );
-
 			if ( inMemoryStrategy.getGenerationTiming() != GenerationTiming.NEVER ) {
 				hadInMemoryGeneration = true;
 			}
@@ -548,7 +569,7 @@ public class EntityMetamodel implements Serializable {
 
 		private void add(InDatabaseValueGenerationStrategy inDatabaseStrategy) {
 			if ( inDatabaseStrategies == null ) {
-				inDatabaseStrategies = new ArrayList<InDatabaseValueGenerationStrategy>();
+				inDatabaseStrategies = new ArrayList<>();
 			}
 			inDatabaseStrategies.add( inDatabaseStrategy );
 
@@ -727,81 +748,6 @@ public class EntityMetamodel implements Serializable {
 		}
 	}
 
-	private ValueInclusion determineInsertValueGenerationType(Property mappingProperty, NonIdentifierAttribute runtimeProperty) {
-		if ( isInsertGenerated( runtimeProperty ) ) {
-			return ValueInclusion.FULL;
-		}
-		else if ( mappingProperty.getValue() instanceof Component ) {
-			if ( hasPartialInsertComponentGeneration( ( Component ) mappingProperty.getValue() ) ) {
-				return ValueInclusion.PARTIAL;
-			}
-		}
-		return ValueInclusion.NONE;
-	}
-
-	private boolean isInsertGenerated(NonIdentifierAttribute property) {
-		return property.getValueGenerationStrategy() != null
-				&& property.getValueGenerationStrategy().getGenerationTiming() != GenerationTiming.NEVER;
-	}
-
-	private boolean isInsertGenerated(Property property) {
-		return property.getValueGenerationStrategy() != null
-				&& property.getValueGenerationStrategy().getGenerationTiming() != GenerationTiming.NEVER;
-	}
-
-	private boolean hasPartialInsertComponentGeneration(Component component) {
-		Iterator subProperties = component.getPropertyIterator();
-		while ( subProperties.hasNext() ) {
-			final Property prop = ( Property ) subProperties.next();
-			if ( isInsertGenerated( prop ) ) {
-				return true;
-			}
-			else if ( prop.getValue() instanceof Component ) {
-				if ( hasPartialInsertComponentGeneration( (Component) prop.getValue() ) ) {
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-
-	private ValueInclusion determineUpdateValueGenerationType(Property mappingProperty, NonIdentifierAttribute runtimeProperty) {
-		if ( isUpdateGenerated( runtimeProperty ) ) {
-			return ValueInclusion.FULL;
-		}
-		else if ( mappingProperty.getValue() instanceof Component ) {
-			if ( hasPartialUpdateComponentGeneration( ( Component ) mappingProperty.getValue() ) ) {
-				return ValueInclusion.PARTIAL;
-			}
-		}
-		return ValueInclusion.NONE;
-	}
-
-	private static boolean isUpdateGenerated(Property property) {
-		return property.getValueGenerationStrategy() != null
-				&& property.getValueGenerationStrategy().getGenerationTiming() == GenerationTiming.ALWAYS;
-	}
-
-	private static boolean isUpdateGenerated(NonIdentifierAttribute property) {
-		return property.getValueGenerationStrategy() != null
-				&& property.getValueGenerationStrategy().getGenerationTiming() == GenerationTiming.ALWAYS;
-	}
-
-	private boolean hasPartialUpdateComponentGeneration(Component component) {
-		Iterator subProperties = component.getPropertyIterator();
-		while ( subProperties.hasNext() ) {
-			Property prop = (Property) subProperties.next();
-			if ( isUpdateGenerated( prop ) ) {
-				return true;
-			}
-			else if ( prop.getValue() instanceof Component ) {
-				if ( hasPartialUpdateComponentGeneration( ( Component ) prop.getValue() ) ) {
-					return true;
-				}
-			}
-		}
-		return false;
-	}
 
 	private void mapPropertyToIndex(Property prop, int i) {
 		propertyIndexes.put( prop.getName(), i );
@@ -827,7 +773,7 @@ public class EntityMetamodel implements Serializable {
 		// insert-generated identifier.  That wont work if the natural-id is also insert-generated.
 		//
 		// Assumptions:
-		//		* That code checks that there is a natural identifier beforeQuery making this call, so we assume the same here
+		//		* That code checks that there is a natural identifier before making this call, so we assume the same here
 		// 		* That code assumes a non-composite natural-id, so we assume the same here
 		final InDatabaseValueGenerationStrategy strategy = inDatabaseValueGenerationStrategies[ naturalIdPropertyNumbers[0] ];
 		return strategy != null && strategy.getGenerationTiming() != GenerationTiming.NEVER;
@@ -864,8 +810,8 @@ public class EntityMetamodel implements Serializable {
 		}
 		else if ( type.isComponentType() ) {
 			Type[] subtypes = ( (CompositeType) type ).getSubtypes();
-			for ( int i = 0; i < subtypes.length; i++ ) {
-				if ( indicatesCollection( subtypes[i] ) ) {
+			for ( Type subtype : subtypes ) {
+					if ( indicatesCollection( subtype ) ) {
 					return true;
 				}
 			}

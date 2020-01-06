@@ -33,20 +33,28 @@ public interface JdbcSessionOwner {
 	TransactionCoordinator getTransactionCoordinator();
 
 	/**
-	 * A afterQuery-begin callback from the coordinator to its owner.
+	 * Callback indicating recognition of entering into a transactional
+	 * context whether that is explicitly via the Hibernate
+	 * {@link org.hibernate.Transaction} API or via registration
+	 * of Hibernate's JTA Synchronization impl with a JTA Transaction
+	 */
+	void startTransactionBoundary();
+
+	/**
+	 * A after-begin callback from the coordinator to its owner.
 	 */
 	void afterTransactionBegin();
 
 	/**
-	 * A beforeQuery-completion callback to the owner.
+	 * A before-completion callback to the owner.
 	 */
 	void beforeTransactionCompletion();
 
 	/**
-	 * An afterQuery-completion callback to the owner.
+	 * An after-completion callback to the owner.
 	 *
 	 * @param successful Was the transaction successful?
-	 * @param delayed Is this a delayed afterQuery transaction completion call (aka afterQuery a timeout)?
+	 * @param delayed Is this a delayed after transaction completion call (aka after a timeout)?
 	 */
 	void afterTransactionCompletion(boolean successful, boolean delayed);
 

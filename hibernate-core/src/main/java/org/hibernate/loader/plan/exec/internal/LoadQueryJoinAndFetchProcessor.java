@@ -38,6 +38,7 @@ import org.hibernate.loader.plan.spi.QuerySpace;
 import org.hibernate.persister.collection.CollectionPersister;
 import org.hibernate.persister.collection.CollectionPropertyNames;
 import org.hibernate.persister.collection.QueryableCollection;
+import org.hibernate.persister.entity.AbstractEntityPersister;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.persister.entity.Joinable;
 import org.hibernate.persister.entity.OuterJoinLoadable;
@@ -60,6 +61,7 @@ import org.jboss.logging.Logger;
  * </ol>
  *
  * @author Steve Ebersole
+ * @author Chris Cranford
  */
 public class LoadQueryJoinAndFetchProcessor {
 	private static final Logger LOG = CoreLogging.logger( LoadQueryJoinAndFetchProcessor.class );
@@ -69,7 +71,7 @@ public class LoadQueryJoinAndFetchProcessor {
 	private final SessionFactoryImplementor factory;
 
 	/**
-	 * Instantiates a LoadQueryBuilderHelper with the given information
+	 * Instantiates a LoadQueryJoinAndFetchProcessor with the given information
 	 *
 	 * @param aliasResolutionContext
 	 * @param buildingParameters
@@ -182,7 +184,8 @@ public class LoadQueryJoinAndFetchProcessor {
 		addJoins(
 				join,
 				joinFragment,
-				joinable
+				joinable,
+				null
 		);
 	}
 
@@ -223,8 +226,8 @@ public class LoadQueryJoinAndFetchProcessor {
 	private void addJoins(
 			Join join,
 			JoinFragment joinFragment,
-			Joinable joinable) {
-
+			Joinable joinable,
+			String joinConditions) {
 		final String rhsTableAlias = aliasResolutionContext.resolveSqlTableAliasFromQuerySpaceUid(
 				join.getRightHandSide().getUid()
 		);
@@ -239,22 +242,53 @@ public class LoadQueryJoinAndFetchProcessor {
 			throw new IllegalStateException( "QuerySpace with that UID was not yet registered in the AliasResolutionContext" );
 		}
 
+		String otherConditions = join.getAnyAdditionalJoinConditions( rhsTableAlias );
+		if ( !StringHelper.isEmpty( otherConditions ) && !StringHelper.isEmpty( joinConditions ) ) {
+			otherConditions += " and " + joinConditions;
+		}
+		else if ( !StringHelper.isEmpty( joinConditions ) ) {
+			otherConditions = joinConditions;
+		}
+
 		// add join fragments from the collection table -> element entity table ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 		final String additionalJoinConditions = resolveAdditionalJoinCondition(
 				rhsTableAlias,
-				join.getAnyAdditionalJoinConditions( rhsTableAlias ),
+				otherConditions,
 				joinable,
 				getJoinedAssociationTypeOrNull( join )
 		);
 
-		joinFragment.addJoin(
-				joinable.getTableName(),
-				rhsTableAlias,
-				join.resolveAliasedLeftHandSideJoinConditionColumns( lhsTableAlias ),
-				join.resolveNonAliasedRightHandSideJoinConditionColumns(),
-				join.isRightHandSideRequired() ? JoinType.INNER_JOIN : JoinType.LEFT_OUTER_JOIN,
-				additionalJoinConditions
-		);
+		String[] joinColumns = join.resolveAliasedLeftHandSideJoinConditionColumns( lhsTableAlias );
+		QuerySpace lhsQuerySpace = join.getLeftHandSide();
+		if ( joinColumns.length == 0 && lhsQuerySpace instanceof EntityQuerySpace ) {
+			// When no columns are available, this is a special join that involves multiple subtypes
+			EntityQuerySpace entityQuerySpace = (EntityQuerySpace) lhsQuerySpace;
+			AbstractEntityPersister persister = (AbstractEntityPersister) entityQuerySpace.getEntityPersister();
+
+			String[][] polyJoinColumns = persister.getPolymorphicJoinColumns(
+					lhsTableAlias,
+					( (JoinDefinedByMetadata) join ).getJoinedPropertyName()
+			);
+
+			joinFragment.addJoin(
+					joinable.getTableName(),
+					rhsTableAlias,
+					polyJoinColumns,
+					join.resolveNonAliasedRightHandSideJoinConditionColumns(),
+					join.isRightHandSideRequired() ? JoinType.INNER_JOIN : JoinType.LEFT_OUTER_JOIN,
+					additionalJoinConditions
+			);
+		}
+		else {
+			joinFragment.addJoin(
+					joinable.getTableName(),
+					rhsTableAlias,
+					joinColumns,
+					join.resolveNonAliasedRightHandSideJoinConditionColumns(),
+					join.isRightHandSideRequired() ? JoinType.INNER_JOIN : JoinType.LEFT_OUTER_JOIN,
+					additionalJoinConditions
+			);
+		}
 		joinFragment.addJoins(
 				joinable.fromJoinFragment( rhsTableAlias, false, true ),
 				joinable.whereJoinFragment( rhsTableAlias, false, true )
@@ -354,7 +388,8 @@ public class LoadQueryJoinAndFetchProcessor {
 		addJoins(
 				join,
 				joinFragment,
-				(Joinable) rightHandSide.getCollectionPersister()
+				(Joinable) rightHandSide.getCollectionPersister(),
+				null
 		);
 	}
 
@@ -378,21 +413,26 @@ public class LoadQueryJoinAndFetchProcessor {
 		if ( StringHelper.isEmpty( entityTableAlias ) ) {
 			throw new IllegalStateException( "Collection element (many-to-many) table alias cannot be empty" );
 		}
+
+		final String manyToManyFilter;
 		if ( JoinDefinedByMetadata.class.isInstance( join ) &&
 				CollectionPropertyNames.COLLECTION_ELEMENTS.equals( ( (JoinDefinedByMetadata) join ).getJoinedPropertyName() ) ) {
 			final CollectionQuerySpace leftHandSide = (CollectionQuerySpace) join.getLeftHandSide();
 			final CollectionPersister persister = leftHandSide.getCollectionPersister();
-			final String manyToManyFilter = persister.getManyToManyFilterFragment(
+			manyToManyFilter = persister.getManyToManyFilterFragment(
 					entityTableAlias,
 					buildingParameters.getQueryInfluencers().getEnabledFilters()
 			);
-			joinFragment.addCondition( manyToManyFilter );
+		}
+		else {
+			manyToManyFilter = null;
 		}
 
 		addJoins(
 				join,
 				joinFragment,
-				(Joinable) entityPersister
+				(Joinable) entityPersister,
+				manyToManyFilter
 		);
 	}
 

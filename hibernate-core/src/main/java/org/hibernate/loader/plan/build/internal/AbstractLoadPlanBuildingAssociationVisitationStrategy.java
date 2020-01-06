@@ -61,7 +61,7 @@ import org.jboss.logging.MDC;
  * LoadPlanBuildingAssociationVisitationStrategy is also a AssociationVisitationStrategy, which is used in
  * conjunction with visiting associations via walking metamodel definitions.
  * <p/>
- * So this strategy defines a AssociationVisitationStrategy that walks the metamodel-defined associations afterQuery
+ * So this strategy defines a AssociationVisitationStrategy that walks the metamodel-defined associations after
  * which is can then build a LoadPlan based on the visited associations. {@link #determineFetchStrategy} is the
  * main decision point that determines if an association is walked.
  *
@@ -286,7 +286,7 @@ public abstract class AbstractLoadPlanBuildingAssociationVisitationStrategy
 		final ExpandingEntityIdentifierDescription identifierDescription =
 				(ExpandingEntityIdentifierDescription) popFromStack();
 
-		// and then on the node beforeQuery it (which should be the entity that owns the identifier being described)
+		// and then on the node before it (which should be the entity that owns the identifier being described)
 		final ExpandingFetchSource entitySource = currentSource();
 		if ( ! EntityReference.class.isInstance( entitySource ) ) {
 			throw new WalkingException( "Unexpected state in FetchSource stack" );
@@ -662,10 +662,6 @@ public abstract class AbstractLoadPlanBuildingAssociationVisitationStrategy
 	@Override
 	public void foundCircularAssociation(AssociationAttributeDefinition attributeDefinition) {
 		final FetchStrategy fetchStrategy = determineFetchStrategy( attributeDefinition );
-		if ( fetchStrategy.getStyle() != FetchStyle.JOIN ) {
-			return; // nothing to do
-		}
-
 		final AssociationKey associationKey = attributeDefinition.getAssociationKey();
 
 		// go ahead and build the bidirectional fetch

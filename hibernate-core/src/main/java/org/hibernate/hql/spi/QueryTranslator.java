@@ -7,6 +7,7 @@
 package org.hibernate.hql.spi;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,8 @@ import org.hibernate.type.Type;
 public interface QueryTranslator {
 	String ERROR_CANNOT_FETCH_WITH_ITERATE = "fetch may not be used with scroll() or iterate()";
 	String ERROR_NAMED_PARAMETER_DOES_NOT_APPEAR = "Named parameter does not appear in Query: ";
+	String ERROR_ORDINAL_PARAMETER_DOES_NOT_APPEAR = "Ordinal parameter [%s] does not appear in Query [%s] ";
+	String ERROR_LEGACY_ORDINAL_PARAMS_NO_LONGER_SUPPORTED = "Legacy-style query parameters (`?`) are no longer supported; use JPA-style ordinal parameters (e.g., `?1`) instead : %s";
 	String ERROR_CANNOT_DETERMINE_TYPE = "Could not determine type of: ";
 	String ERROR_CANNOT_FORMAT_LITERAL =  "Could not format constant value to SQL literal: ";
 
@@ -168,6 +171,14 @@ public interface QueryTranslator {
 	boolean containsCollectionFetches();
 
 	boolean isManipulationStatement();
+
+	default boolean isUpdateStatement() {
+		return getQueryString().toLowerCase().trim().startsWith( "update" );
+	}
+
+	default List<String> getPrimaryFromClauseTables() {
+		return new ArrayList<>();
+	}
 
 	Class getDynamicInstantiationResultType();
 }

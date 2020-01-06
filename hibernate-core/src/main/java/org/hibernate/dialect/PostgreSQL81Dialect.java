@@ -7,6 +7,7 @@
 package org.hibernate.dialect;
 
 import java.sql.CallableStatement;
+import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
@@ -242,7 +243,7 @@ public class PostgreSQL81Dialect extends Dialect {
 
 	@Override
 	public String getQuerySequencesString() {
-		return "select relname from pg_class where relkind='S'";
+		return "select * from information_schema.sequences";
 	}
 
 	@Override
@@ -421,7 +422,7 @@ public class PostgreSQL81Dialect extends Dialect {
 	private static final ViolatedConstraintNameExtracter EXTRACTER = new TemplatedViolatedConstraintNameExtracter() {
 		@Override
 		protected String doExtractConstraintName(SQLException sqle) throws NumberFormatException {
-			final int sqlState = Integer.valueOf( JdbcExceptionHelper.extractSqlState( sqle ) );
+			final int sqlState = Integer.parseInt( JdbcExceptionHelper.extractSqlState( sqle ) );
 			switch (sqlState) {
 				// CHECK VIOLATION
 				case 23514: return extractUsingTemplate( "violates check constraint \"","\"", sqle.getMessage() );
@@ -487,7 +488,35 @@ public class PostgreSQL81Dialect extends Dialect {
 	 */
 	@Override
 	protected String getCreateSequenceString(String sequenceName, int initialValue, int incrementSize) {
-		return getCreateSequenceString( sequenceName ) + " start " + initialValue + " increment " + incrementSize;
+		if ( initialValue < 0 && incrementSize > 0 ) {
+			return
+					String.format(
+							"%s minvalue %d start %d increment %d",
+							getCreateSequenceString( sequenceName ),
+							initialValue,
+							initialValue,
+							incrementSize
+					);
+		}
+		else if ( initialValue > 0 && incrementSize < 0 ) {
+			return
+					String.format(
+							"%s maxvalue %d start %d increment %d",
+							getCreateSequenceString( sequenceName ),
+							initialValue,
+							initialValue,
+							incrementSize
+					);
+		}
+		else {
+			return
+					String.format(
+							"%s start %d increment %d",
+							getCreateSequenceString( sequenceName ),
+							initialValue,
+							incrementSize
+					);
+		}
 	}
 	
 	// Overridden informational metadata ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -587,7 +616,7 @@ public class PostgreSQL81Dialect extends Dialect {
 
 	@Override
 	public ResultSet getResultSet(CallableStatement statement, String name) throws SQLException {
-		throw new UnsupportedOperationException( "PostgreSQL only supports accessing REF_CURSOR parameters by name" );
+		throw new UnsupportedOperationException( "PostgreSQL only supports accessing REF_CURSOR parameters by position" );
 	}
 
 	@Override
@@ -599,4 +628,25 @@ public class PostgreSQL81Dialect extends Dialect {
 	public IdentityColumnSupport getIdentityColumnSupport() {
 		return new PostgreSQL81IdentityColumnSupport();
 	}
+
+	@Override
+	public boolean supportsNationalizedTypes() {
+		return false;
+	}
+
+	@Override
+	public boolean supportsNoWait() {
+		return true;
+	}
+
+	@Override
+	public boolean supportsJdbcConnectionLobCreation(DatabaseMetaData databaseMetaData) {
+		return false;
+	}
+
+	@Override
+	public boolean supportsSelectAliasInGroupByClause() {
+		return true;
+	}
+
 }

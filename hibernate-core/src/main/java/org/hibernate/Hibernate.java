@@ -8,6 +8,7 @@ package org.hibernate;
 
 import java.util.Iterator;
 
+import org.hibernate.bytecode.enhance.spi.interceptor.EnhancementAsProxyLazinessInterceptor;
 import org.hibernate.bytecode.enhance.spi.interceptor.LazyAttributeLoadingInterceptor;
 import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.engine.HibernateIterator;
@@ -63,6 +64,13 @@ public final class Hibernate {
 		else if ( proxy instanceof PersistentCollection ) {
 			( (PersistentCollection) proxy ).forceInitialization();
 		}
+		else if ( proxy instanceof PersistentAttributeInterceptable ) {
+			final PersistentAttributeInterceptable interceptable = (PersistentAttributeInterceptable) proxy;
+			final PersistentAttributeInterceptor interceptor = interceptable.$$_hibernate_getInterceptor();
+			if ( interceptor instanceof EnhancementAsProxyLazinessInterceptor ) {
+				( (EnhancementAsProxyLazinessInterceptor) interceptor ).forceInitialize( proxy, null );
+			}
+		}
 	}
 
 	/**
@@ -75,6 +83,13 @@ public final class Hibernate {
 	public static boolean isInitialized(Object proxy) {
 		if ( proxy instanceof HibernateProxy ) {
 			return !( (HibernateProxy) proxy ).getHibernateLazyInitializer().isUninitialized();
+		}
+		else if ( proxy instanceof PersistentAttributeInterceptable ) {
+			final PersistentAttributeInterceptor interceptor = ( (PersistentAttributeInterceptable) proxy ).$$_hibernate_getInterceptor();
+			if ( interceptor instanceof EnhancementAsProxyLazinessInterceptor ) {
+				return false;
+			}
+			return true;
 		}
 		else if ( proxy instanceof PersistentCollection ) {
 			return ( (PersistentCollection) proxy ).wasInitialized();
@@ -187,7 +202,10 @@ public final class Hibernate {
 
 		if ( entity instanceof PersistentAttributeInterceptable ) {
 			PersistentAttributeInterceptor interceptor = ( (PersistentAttributeInterceptable) entity ).$$_hibernate_getInterceptor();
-			if ( interceptor != null && interceptor instanceof LazyAttributeLoadingInterceptor ) {
+			if ( interceptor instanceof EnhancementAsProxyLazinessInterceptor ) {
+				return false;
+			}
+			if ( interceptor instanceof LazyAttributeLoadingInterceptor ) {
 				return ( (LazyAttributeLoadingInterceptor) interceptor ).isAttributeLoaded( propertyName );
 			}
 		}
@@ -195,4 +213,33 @@ public final class Hibernate {
 		return true;
 	}
 
+    /**
+     * Unproxies a {@link HibernateProxy}. If the proxy is uninitialized, it automatically triggers an initialization.
+     * In case the supplied object is null or not a proxy, the object will be returned as-is.
+     *
+     * @param proxy the {@link HibernateProxy} to be unproxied
+     * @return the proxy's underlying implementation object, or the supplied object otherwise
+     */
+	public static Object unproxy(Object proxy) {
+		if ( proxy instanceof HibernateProxy ) {
+			HibernateProxy hibernateProxy = (HibernateProxy) proxy;
+			LazyInitializer initializer = hibernateProxy.getHibernateLazyInitializer();
+			return initializer.getImplementation();
+		}
+		else {
+			return proxy;
+		}
+	}
+
+	/**
+	 * Unproxies a {@link HibernateProxy}. If the proxy is uninitialized, it automatically triggers an initialization.
+	 * In case the supplied object is null or not a proxy, the object will be returned as-is.
+	 *
+	 * @param proxy the {@link HibernateProxy} to be unproxied
+	 * @param entityClass the entity type
+	 * @return the proxy's underlying implementation object, or the supplied object otherwise
+	 */
+	public static <T> T unproxy(T proxy, Class<T> entityClass) {
+		return entityClass.cast( unproxy( proxy ) );
+	}
 }

@@ -10,19 +10,22 @@ import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
 
 import org.hibernate.HibernateException;
-import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
+import org.hibernate.cache.spi.access.NaturalIdDataAccess;
+import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.ResolveNaturalIdEvent;
 import org.hibernate.event.spi.ResolveNaturalIdEventListener;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.pretty.MessageHelper;
+import org.hibernate.stat.spi.StatisticsImplementor;
 
 /**
  * Defines the default load event listeners used by hibernate for loading entities
  * in response to generated load events.
- * 
+ *
  * @author Eric Dalquist
  * @author Steve Ebersole
  */
@@ -46,7 +49,7 @@ public class DefaultResolveNaturalIdEventListener
 	 * made to load the entity from the session-level cache. If not found there,
 	 * an attempt is made to locate it in second-level cache. Lastly, an
 	 * attempt is made to load it directly from the datasource.
-	 * 
+	 *
 	 * @param event The load event
 	 *
 	 * @return The loaded entity, or null.
@@ -54,29 +57,31 @@ public class DefaultResolveNaturalIdEventListener
 	protected Serializable resolveNaturalId(final ResolveNaturalIdEvent event) {
 		final EntityPersister persister = event.getEntityPersister();
 
-		final boolean traceEnabled = LOG.isTraceEnabled();
-		if ( traceEnabled ) {
+		if ( LOG.isTraceEnabled() ) {
 			LOG.tracev(
-					"Attempting to resolve: {0}",
-					MessageHelper.infoString( persister, event.getNaturalIdValues(), event.getSession().getFactory() )
+					"Attempting to resolve: {0}#{1}",
+					MessageHelper.infoString( persister ),
+					event.getNaturalIdValues()
 			);
 		}
 
 		Serializable entityId = resolveFromCache( event );
 		if ( entityId != null ) {
-			if ( traceEnabled ) {
+			if ( LOG.isTraceEnabled() ) {
 				LOG.tracev(
-						"Resolved object in cache: {0}",
-						MessageHelper.infoString( persister, event.getNaturalIdValues(), event.getSession().getFactory() )
+						"Resolved object in cache: {0}#{1}",
+						MessageHelper.infoString( persister ),
+						event.getNaturalIdValues()
 				);
 			}
 			return entityId;
 		}
 
-		if ( traceEnabled ) {
+		if ( LOG.isTraceEnabled() ) {
 			LOG.tracev(
-					"Object not resolved in any cache: {0}",
-					MessageHelper.infoString( persister, event.getNaturalIdValues(), event.getSession().getFactory() )
+					"Object not resolved in any cache: {0}#{1}",
+					MessageHelper.infoString( persister ),
+					event.getNaturalIdValues()
 			);
 		}
 
@@ -85,13 +90,13 @@ public class DefaultResolveNaturalIdEventListener
 
 	/**
 	 * Attempts to resolve the entity id corresponding to the event's natural id values from the session
-	 * 
+	 *
 	 * @param event The load event
 	 *
 	 * @return The entity from the cache, or null.
 	 */
 	protected Serializable resolveFromCache(final ResolveNaturalIdEvent event) {
-		return event.getSession().getPersistenceContext().getNaturalIdHelper().findCachedNaturalIdResolution(
+		return event.getSession().getPersistenceContextInternal().getNaturalIdHelper().findCachedNaturalIdResolution(
 				event.getEntityPersister(),
 				event.getOrderedNaturalIdValues()
 		);
@@ -100,44 +105,46 @@ public class DefaultResolveNaturalIdEventListener
 	/**
 	 * Performs the process of loading an entity from the configured
 	 * underlying datasource.
-	 * 
+	 *
 	 * @param event The load event
 	 *
 	 * @return The object loaded from the datasource, or null if not found.
 	 */
 	protected Serializable loadFromDatasource(final ResolveNaturalIdEvent event) {
-		final SessionFactoryImplementor factory = event.getSession().getFactory();
-		final boolean stats = factory.getStatistics().isStatisticsEnabled();
+		final EventSource session = event.getSession();
+		final SessionFactoryImplementor factory = session.getFactory();
+		final StatisticsImplementor statistics = factory.getStatistics();
+		final boolean stats = statistics.isStatisticsEnabled();
 		long startTime = 0;
 		if ( stats ) {
 			startTime = System.nanoTime();
 		}
-		
+
 		final Serializable pk = event.getEntityPersister().loadEntityIdByNaturalId(
 				event.getOrderedNaturalIdValues(),
 				event.getLockOptions(),
-				event.getSession()
+				session
 		);
-		
+
 		if ( stats ) {
-			final NaturalIdRegionAccessStrategy naturalIdCacheAccessStrategy = event.getEntityPersister().getNaturalIdCacheAccessStrategy();
-			final String regionName = naturalIdCacheAccessStrategy == null ? null : naturalIdCacheAccessStrategy.getRegion().getName();
 			final long endTime = System.nanoTime();
 			final long milliseconds = TimeUnit.MILLISECONDS.convert( endTime - startTime, TimeUnit.NANOSECONDS );
-			factory.getStatisticsImplementor().naturalIdQueryExecuted(
-					regionName,
-					milliseconds );
+			statistics.naturalIdQueryExecuted(
+					event.getEntityPersister().getRootEntityName(),
+					milliseconds
+			);
 		}
-		
+
 		//PK can be null if the entity doesn't exist
 		if (pk != null) {
-			event.getSession().getPersistenceContext().getNaturalIdHelper().cacheNaturalIdCrossReferenceFromLoad(
+			final PersistenceContext persistenceContext = session.getPersistenceContextInternal();
+			persistenceContext.getNaturalIdHelper().cacheNaturalIdCrossReferenceFromLoad(
 					event.getEntityPersister(),
 					pk,
 					event.getOrderedNaturalIdValues()
 			);
 		}
-		
+
 		return pk;
 	}
 }

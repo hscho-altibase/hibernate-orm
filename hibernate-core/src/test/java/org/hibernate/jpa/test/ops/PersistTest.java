@@ -17,8 +17,12 @@ import javax.persistence.PersistenceException;
 import javax.persistence.RollbackException;
 
 import org.hibernate.cfg.Environment;
+import org.hibernate.dialect.AbstractHANADialect;
 import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
 
+import org.hibernate.testing.DialectChecks;
+import org.hibernate.testing.RequiresDialectFeature;
+import org.hibernate.testing.SkipForDialect;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -30,6 +34,7 @@ import static org.junit.Assert.fail;
  * @author Gavin King
  * @author Hardy Ferentschik
  */
+@RequiresDialectFeature(DialectChecks.SupportsNoColumnInsert.class)
 public class PersistTest extends BaseEntityManagerFunctionalTestCase {
 	@Test
 	public void testCreateTree() {
@@ -164,6 +169,7 @@ public class PersistTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value = AbstractHANADialect.class, comment = " HANA doesn't support tables consisting of only a single auto-generated column")
 	public void testBasic() throws Exception {
 
 		EntityManager em = getOrCreateEntityManager();

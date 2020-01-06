@@ -366,7 +366,7 @@ public class Ejb3Column {
 		}
 		else {
 			getMappingColumn().setValue( value );
-			value.addColumn( getMappingColumn() );
+			value.addColumn( getMappingColumn(), insertable, updatable );
 			value.getTable().addColumn( getMappingColumn() );
 			addColumnBinding( value );
 			table = value.getTable();
@@ -542,7 +542,7 @@ public class Ejb3Column {
 					javax.persistence.Column col = actualCols[index];
 
 					final String sqlType;
-					if ( col.columnDefinition().equals( "" ) ) {
+					if ( col.columnDefinition().isEmpty() ) {
 						sqlType = null;
 					}
 					else {
@@ -632,7 +632,7 @@ public class Ejb3Column {
 		}
 	}
 
-	//must only be called afterQuery all setters are defined and beforeQuery bind
+	//must only be called after all setters are defined and before bind
 	private void extractDataFromPropertyData(PropertyData inferredData) {
 		if ( inferredData != null ) {
 			XProperty property = inferredData.getProperty();
@@ -649,10 +649,17 @@ public class Ejb3Column {
 	}
 
 	private void processExpression(ColumnTransformer annotation) {
-		String nonNullLogicalColumnName = logicalColumnName != null ? logicalColumnName : ""; //use the default for annotations
-		if ( annotation != null &&
-				( StringHelper.isEmpty( annotation.forColumn() )
-						|| annotation.forColumn().equals( nonNullLogicalColumnName ) ) ) {
+		if ( annotation == null ) {
+			return;
+		}
+
+		final String nonNullLogicalColumnName = logicalColumnName != null
+				? logicalColumnName
+				//use the default for annotations
+				: "";
+
+		if ( StringHelper.isEmpty( annotation.forColumn() )
+				|| annotation.forColumn().equals( nonNullLogicalColumnName ) ) {
 			readExpression = annotation.read();
 			if ( StringHelper.isEmpty( readExpression ) ) {
 				readExpression = null;

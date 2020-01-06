@@ -50,7 +50,7 @@ public class DefaultEvictEventListener implements EvictEventListener {
 		}
 
 		final EventSource source = event.getSession();
-		final PersistenceContext persistenceContext = source.getPersistenceContext();
+		final PersistenceContext persistenceContext = source.getPersistenceContextInternal();
 
 		if ( object instanceof HibernateProxy ) {
 			final LazyInitializer li = ( (HibernateProxy) object ).getHibernateLazyInitializer();
@@ -73,9 +73,8 @@ public class DefaultEvictEventListener implements EvictEventListener {
 			li.unsetSession();
 		}
 		else {
-			EntityEntry e = persistenceContext.removeEntry( object );
+			EntityEntry e = persistenceContext.getEntry( object );
 			if ( e != null ) {
-				persistenceContext.removeEntity( e.getEntityKey() );
 				doEvict( object, e.getEntityKey(), e.getPersister(), source );
 			}
 			else {
@@ -109,8 +108,9 @@ public class DefaultEvictEventListener implements EvictEventListener {
 			LOG.tracev( "Evicting {0}", MessageHelper.infoString( persister ) );
 		}
 
+		final PersistenceContext persistenceContext = session.getPersistenceContextInternal();
 		if ( persister.hasNaturalIdentifier() ) {
-			session.getPersistenceContext().getNaturalIdHelper().handleEviction(
+			persistenceContext.getNaturalIdHelper().handleEviction(
 					object,
 					persister,
 					key.getIdentifier()
@@ -119,7 +119,7 @@ public class DefaultEvictEventListener implements EvictEventListener {
 
 		// remove all collections for the entity from the session-level cache
 		if ( persister.hasCollections() ) {
-			new EvictVisitor( session ).process( object, persister );
+			new EvictVisitor( session, object ).process( object, persister );
 		}
 
 		// remove any snapshot, not really for memory management purposes, but
@@ -127,6 +127,9 @@ public class DefaultEvictEventListener implements EvictEventListener {
 		// EntityEntry to take precedence
 		// This is now handled by removeEntity()
 		//session.getPersistenceContext().removeDatabaseSnapshot(key);
+		
+		persistenceContext.removeEntity( key );
+		persistenceContext.removeEntry( object );
 
 		Cascade.cascade( CascadingActions.EVICT, CascadePoint.AFTER_EVICT, session, persister, object );
 	}

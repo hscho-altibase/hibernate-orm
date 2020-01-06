@@ -10,6 +10,7 @@ import java.beans.BeanInfo;
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.Method;
 import java.sql.Connection;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -56,9 +57,19 @@ public class ConnectionProviderInitiator implements StandardServiceInitiator<Con
 	public static final String PROXOOL_STRATEGY = "proxool";
 
 	/**
-	 * The strategy for proxool connection pooling
+	 * The strategy for hikari connection pooling
 	 */
 	public static final String HIKARI_STRATEGY = "hikari";
+
+	/**
+	 * The strategy for vibur connection pooling
+	 */
+	public static final String VIBUR_STRATEGY = "vibur";
+
+	/**
+	 * The strategy for agroal connection pooling
+	 */
+	public static final String AGROAL_STRATEGY = "agroal";
 
 	/**
 	 * No idea.  Is this even still used?
@@ -112,20 +123,31 @@ public class ConnectionProviderInitiator implements StandardServiceInitiator<Con
 				return instantiateExplicitConnectionProvider( providerClass );
 			}
 			else {
-				String providerName = explicitSetting.toString();
-				if ( LEGACY_CONNECTION_PROVIDER_MAPPING.containsKey( providerName ) ) {
-					final String actualProviderName = LEGACY_CONNECTION_PROVIDER_MAPPING.get( providerName );
-					DeprecationLogger.DEPRECATION_LOGGER.connectionProviderClassDeprecated( providerName, actualProviderName );
-					providerName = actualProviderName;
-				}
+				String providerName = StringHelper.nullIfEmpty( explicitSetting.toString() );
+				if ( providerName != null ) {
+					if ( LEGACY_CONNECTION_PROVIDER_MAPPING.containsKey( providerName ) ) {
+						final String actualProviderName = LEGACY_CONNECTION_PROVIDER_MAPPING.get( providerName );
+						DeprecationLogger.DEPRECATION_LOGGER.connectionProviderClassDeprecated(
+								providerName,
+								actualProviderName
+						);
+						providerName = actualProviderName;
+					}
 
-				LOG.instantiatingExplicitConnectionProvider( providerName );
-				final Class providerClass = strategySelector.selectStrategyImplementor( ConnectionProvider.class, providerName );
-				try {
-					return instantiateExplicitConnectionProvider( providerClass );
-				}
-				catch (Exception e) {
-					throw new HibernateException( "Could not instantiate connection provider [" + providerName + "]", e );
+					LOG.instantiatingExplicitConnectionProvider( providerName );
+					final Class providerClass = strategySelector.selectStrategyImplementor(
+							ConnectionProvider.class,
+							providerName
+					);
+					try {
+						return instantiateExplicitConnectionProvider( providerClass );
+					}
+					catch (Exception e) {
+						throw new HibernateException(
+								"Could not instantiate connection provider [" + providerName + "]",
+								e
+						);
+					}
 				}
 			}
 		}
@@ -135,6 +157,16 @@ public class ConnectionProviderInitiator implements StandardServiceInitiator<Con
 		}
 
 		ConnectionProvider connectionProvider = null;
+
+		final Class<? extends ConnectionProvider> singleRegisteredProvider = getSingleRegisteredProvider( strategySelector );
+		if ( singleRegisteredProvider != null ) {
+			try {
+				connectionProvider = singleRegisteredProvider.newInstance();
+			}
+			catch (IllegalAccessException | InstantiationException e) {
+				throw new HibernateException( "Could not instantiate singular-registered ConnectionProvider", e );
+			}
+		}
 
 		if ( connectionProvider == null ) {
 			if ( c3p0ConfigDefined( configurationValues ) ) {
@@ -151,6 +183,18 @@ public class ConnectionProviderInitiator implements StandardServiceInitiator<Con
 		if ( connectionProvider == null ) {
 			if ( hikariConfigDefined( configurationValues ) ) {
 				connectionProvider = instantiateHikariProvider( strategySelector );
+			}
+		}
+
+		if ( connectionProvider == null ) {
+			if ( viburConfigDefined( configurationValues ) ) {
+				connectionProvider = instantiateViburProvider( strategySelector );
+			}
+		}
+
+		if ( connectionProvider == null ) {
+			if ( agroalConfigDefined( configurationValues ) ) {
+				connectionProvider = instantiateAgroalProvider( strategySelector );
 			}
 		}
 
@@ -190,6 +234,15 @@ public class ConnectionProviderInitiator implements StandardServiceInitiator<Con
 		}
 
 		return connectionProvider;
+	}
+
+	private Class<? extends ConnectionProvider> getSingleRegisteredProvider(StrategySelector strategySelector) {
+		final Collection<Class<? extends ConnectionProvider>> implementors = strategySelector.getRegisteredStrategyImplementors( ConnectionProvider.class );
+		if ( implementors != null && implementors.size() == 1 ) {
+			return implementors.iterator().next();
+		}
+
+		return null;
 	}
 
 	private ConnectionProvider instantiateExplicitConnectionProvider(Class providerClass) {
@@ -264,6 +317,53 @@ public class ConnectionProviderInitiator implements StandardServiceInitiator<Con
 		}
 	}
 
+	private boolean viburConfigDefined(Map configValues) {
+		for ( Object key : configValues.keySet() ) {
+			if ( !String.class.isInstance( key ) ) {
+				continue;
+			}
+
+			if ( ( (String) key ).startsWith( "hibernate.vibur." ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+
+	private boolean agroalConfigDefined(Map configValues) {
+		for ( Object key : configValues.keySet() ) {
+			if ( !String.class.isInstance( key ) ) {
+				continue;
+			}
+
+			if ( ( (String) key ).startsWith( "hibernate.agroal." ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private ConnectionProvider instantiateViburProvider(StrategySelector strategySelector) {
+		try {
+			return strategySelector.selectStrategyImplementor( ConnectionProvider.class, VIBUR_STRATEGY ).newInstance();
+		}
+		catch ( Exception e ) {
+			LOG.viburProviderClassNotFound();
+			return null;
+		}
+	}
+
+	private ConnectionProvider instantiateAgroalProvider(StrategySelector strategySelector) {
+		try {
+			return strategySelector.selectStrategyImplementor( ConnectionProvider.class, AGROAL_STRATEGY ).newInstance();
+		}
+		catch ( Exception e ) {
+			LOG.agroalProviderClassNotFound();
+			return null;
+		}
+	}
+
 	/**
 	 * Build the connection properties capable of being passed to the {@link java.sql.DriverManager#getConnection}
 	 * forms taking {@link Properties} argument.  We seek out all keys in the passed map which start with
@@ -317,6 +417,7 @@ public class ConnectionProviderInitiator implements StandardServiceInitiator<Con
 		SPECIAL_PROPERTIES.add( AvailableSettings.ISOLATION );
 		SPECIAL_PROPERTIES.add( AvailableSettings.DRIVER );
 		SPECIAL_PROPERTIES.add( AvailableSettings.USER );
+		SPECIAL_PROPERTIES.add( AvailableSettings.CONNECTION_PROVIDER_DISABLES_AUTOCOMMIT );
 
 		ISOLATION_VALUE_MAP = new ConcurrentHashMap<String, Integer>();
 		ISOLATION_VALUE_MAP.put( "TRANSACTION_NONE", Connection.TRANSACTION_NONE );

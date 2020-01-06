@@ -12,6 +12,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TimeZone;
 import java.util.UUID;
 import javax.persistence.EntityGraph;
 import javax.persistence.EntityManagerFactory;
@@ -37,6 +38,7 @@ import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
 import org.hibernate.MultiIdentifierLoadAccess;
 import org.hibernate.NaturalIdLoadAccess;
+import org.hibernate.Query;
 import org.hibernate.ReplicationMode;
 import org.hibernate.ScrollMode;
 import org.hibernate.Session;
@@ -46,12 +48,14 @@ import org.hibernate.SimpleNaturalIdLoadAccess;
 import org.hibernate.Transaction;
 import org.hibernate.TypeHelper;
 import org.hibernate.UnknownProfileException;
+import org.hibernate.cache.spi.CacheTransactionSynchronization;
 import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.engine.jdbc.LobCreator;
 import org.hibernate.engine.jdbc.connections.spi.JdbcConnectionAccess;
 import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
 import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.engine.query.spi.sql.NativeSQLQuerySpecification;
+import org.hibernate.graph.spi.RootGraphImplementor;
 import org.hibernate.jdbc.ReturningWork;
 import org.hibernate.jdbc.Work;
 import org.hibernate.loader.custom.CustomQuery;
@@ -67,12 +71,12 @@ import org.hibernate.type.descriptor.sql.SqlTypeDescriptor;
 
 /**
  * This class is meant to be extended.
- * 
+ *
  * Wraps and delegates all methods to a {@link SessionImplementor} and
  * a {@link Session}. This is useful for custom implementations of this
  * API so that only some methods need to be overridden
  * (Used by Hibernate Search).
- * 
+ *
  * @author Sanne Grinovero <sanne@hibernate.org> (C) 2012 Red Hat Inc.
  */
 @SuppressWarnings("deprecation")
@@ -81,7 +85,7 @@ public class SessionDelegatorBaseImpl implements SessionImplementor {
 	protected final SessionImplementor delegate;
 
 	/**
-	 * @deprecated (snce 6.0) SessionDelegatorBaseImpl should take just one argument, the SessionImplementor.
+	 * @deprecated (since 5.3) SessionDelegatorBaseImpl should take just one argument, the SessionImplementor.
 	 * Use the {@link #SessionDelegatorBaseImpl(SessionImplementor)} form instead
 	 */
 	@Deprecated
@@ -101,6 +105,16 @@ public class SessionDelegatorBaseImpl implements SessionImplementor {
 
 	public SessionDelegatorBaseImpl(SessionImplementor delegate) {
 		this( delegate, delegate );
+	}
+
+	/**
+	 * Returns the underlying delegate. Be careful that is has a different behavior from the {@link #getDelegate()}
+	 * method coming from the EntityManager interface which returns the current session.
+	 *
+	 * @see SessionDelegatorBaseImpl#getDelegate()
+	 */
+	protected SessionImplementor delegate() {
+		return delegate;
 	}
 
 	@Override
@@ -141,6 +155,11 @@ public class SessionDelegatorBaseImpl implements SessionImplementor {
 	@Override
 	public boolean isTransactionInProgress() {
 		return delegate.isTransactionInProgress();
+	}
+
+	@Override
+	public void checkTransactionNeededForUpdateOperation(String exceptionMessage) {
+		delegate.checkTransactionNeededForUpdateOperation( exceptionMessage );
 	}
 
 	@Override
@@ -323,6 +342,11 @@ public class SessionDelegatorBaseImpl implements SessionImplementor {
 	}
 
 	@Override
+	public long getTransactionStartTimestamp() {
+		return delegate.getTransactionStartTimestamp();
+	}
+
+	@Override
 	public FlushModeType getFlushMode() {
 		return delegate.getFlushMode();
 	}
@@ -403,6 +427,16 @@ public class SessionDelegatorBaseImpl implements SessionImplementor {
 	}
 
 	@Override
+	public void checkOpen() {
+		delegate.checkOpen();
+	}
+
+	@Override
+	public boolean isOpenOrWaitingForAutoClose() {
+		return delegate.isOpenOrWaitingForAutoClose();
+	}
+
+	@Override
 	public boolean shouldAutoClose() {
 		return delegate.shouldAutoClose();
 	}
@@ -410,6 +444,11 @@ public class SessionDelegatorBaseImpl implements SessionImplementor {
 	@Override
 	public boolean isAutoCloseSessionEnabled() {
 		return delegate.isAutoCloseSessionEnabled();
+	}
+
+	@Override
+	public boolean isQueryParametersValidationEnabled() {
+		return delegate.isQueryParametersValidationEnabled();
 	}
 
 	@Override
@@ -425,6 +464,11 @@ public class SessionDelegatorBaseImpl implements SessionImplementor {
 	@Override
 	public ExceptionConverter getExceptionConverter() {
 		return delegate.getExceptionConverter();
+	}
+
+	@Override
+	public PersistenceContext getPersistenceContextInternal() {
+		return delegate.getPersistenceContextInternal();
 	}
 
 	@Override
@@ -445,6 +489,16 @@ public class SessionDelegatorBaseImpl implements SessionImplementor {
 	@Override
 	public Transaction getTransaction() {
 		return delegate.getTransaction();
+	}
+
+	@Override
+	public void startTransactionBoundary() {
+		delegate.startTransactionBoundary();
+	}
+
+	@Override
+	public CacheTransactionSynchronization getCacheTransactionSynchronization() {
+		return delegate.getCacheTransactionSynchronization();
 	}
 
 	@Override
@@ -483,17 +537,17 @@ public class SessionDelegatorBaseImpl implements SessionImplementor {
 	}
 
 	@Override
-	public <T> EntityGraph<T> createEntityGraph(Class<T> rootType) {
+	public <T> RootGraphImplementor<T> createEntityGraph(Class<T> rootType) {
 		return delegate.createEntityGraph( rootType );
 	}
 
 	@Override
-	public EntityGraph<?> createEntityGraph(String graphName) {
+	public RootGraphImplementor<?> createEntityGraph(String graphName) {
 		return delegate.createEntityGraph( graphName );
 	}
 
 	@Override
-	public EntityGraph<?> getEntityGraph(String graphName) {
+	public RootGraphImplementor<?> getEntityGraph(String graphName) {
 		return delegate.getEntityGraph( graphName );
 	}
 
@@ -574,7 +628,7 @@ public class SessionDelegatorBaseImpl implements SessionImplementor {
 
 	@Override
 	public StoredProcedureQuery createStoredProcedureQuery(String procedureName) {
-		return delegate.createNamedStoredProcedureQuery( procedureName );
+		return delegate.createStoredProcedureQuery( procedureName );
 	}
 
 	@Override
@@ -602,9 +656,18 @@ public class SessionDelegatorBaseImpl implements SessionImplementor {
 		return delegate.unwrap( cls );
 	}
 
+	/**
+	 * This is an implementation of EntityManager#getDelegate(). It returns the current session and not the delegate
+	 * session as it is what we want. The name of the method is misleading here but, as it is part of JPA, we cannot do
+	 * anything about it.
+	 * <p>
+	 * To get the underlying delegate, use {@link #delegate()} instead.
+	 *
+	 * @see SessionDelegatorBaseImpl#delegate()
+	 */
 	@Override
 	public Object getDelegate() {
-		return delegate;
+		return this;
 	}
 
 	@Override
@@ -918,7 +981,7 @@ public class SessionDelegatorBaseImpl implements SessionImplementor {
 	}
 
 	@Override
-	public org.hibernate.query.Query createFilter(Object collection, String queryString) {
+	public Query createFilter(Object collection, String queryString) {
 		return delegate.createFilter( collection, queryString );
 	}
 
@@ -1165,5 +1228,10 @@ public class SessionDelegatorBaseImpl implements SessionImplementor {
 	@Override
 	public void setJdbcBatchSize(Integer jdbcBatchSize) {
 		delegate.setJdbcBatchSize( jdbcBatchSize );
+	}
+
+	@Override
+	public TimeZone getJdbcTimeZone() {
+		return delegate.getJdbcTimeZone();
 	}
 }

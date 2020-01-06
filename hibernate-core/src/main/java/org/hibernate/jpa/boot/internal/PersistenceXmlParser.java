@@ -11,28 +11,26 @@ import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.persistence.PersistenceException;
 import javax.persistence.spi.PersistenceUnitTransactionType;
-import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamSource;
-import javax.xml.validation.Schema;
-import javax.xml.validation.SchemaFactory;
 import javax.xml.validation.Validator;
 
 import org.hibernate.boot.archive.internal.ArchiveHelper;
 import org.hibernate.boot.registry.classloading.internal.ClassLoaderServiceImpl;
 import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
-import org.hibernate.internal.util.StringHelper;
-import org.hibernate.internal.util.xml.XsdException;
-import org.hibernate.jpa.AvailableSettings;
+import org.hibernate.boot.xsd.ConfigXsdSupport;
+import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.internal.EntityManagerMessageLogger;
+import org.hibernate.internal.util.StringHelper;
 import org.hibernate.jpa.internal.util.ConfigurationHelper;
 
 import org.w3c.dom.Document;
@@ -54,47 +52,195 @@ import static org.hibernate.internal.HEMLogging.messageLogger;
 public class PersistenceXmlParser {
 	private static final EntityManagerMessageLogger LOG = messageLogger( PersistenceXmlParser.class );
 
-	private final ClassLoaderService classLoaderService;
-	private final PersistenceUnitTransactionType defaultTransactionType;
-
+	/**
+	 * Find all persistence-units from all accessible {@code META-INF/persistence.xml} resources
+	 *
+	 * @param integration The Map of integration settings
+	 *
+	 * @return List of descriptors for all discovered persistence-units.
+	 */
 	public static List<ParsedPersistenceXmlDescriptor> locatePersistenceUnits(Map integration) {
 		final PersistenceXmlParser parser = new PersistenceXmlParser(
 				ClassLoaderServiceImpl.fromConfigSettings( integration ),
 				PersistenceUnitTransactionType.RESOURCE_LOCAL
 		);
-
-		return parser.doResolve( integration );
+		parser.doResolve( integration );
+		return new ArrayList<>( parser.persistenceUnits.values() );
 	}
 
+	/**
+	 * Parse a specific {@code persistence.xml} with the assumption that it defines a single
+	 * persistence-unit.
+	 *
+	 * @param persistenceXmlUrl The {@code persistence.xml} URL
+	 *
+	 * @return The single persistence-unit descriptor
+	 */
+	public static ParsedPersistenceXmlDescriptor locateIndividualPersistenceUnit(URL persistenceXmlUrl) {
+		return locateIndividualPersistenceUnit( persistenceXmlUrl, Collections.emptyMap() );
+	}
 
-	public PersistenceXmlParser(ClassLoaderService classLoaderService, PersistenceUnitTransactionType defaultTransactionType) {
+	/**
+	 * Parse a specific {@code persistence.xml} with the assumption that it defines a single
+	 * persistence-unit.
+	 *
+	 * @param persistenceXmlUrl The {@code persistence.xml} URL
+	 * @param integration The Map of integration settings
+	 *
+	 * @return The single persistence-unit descriptor
+	 */
+	@SuppressWarnings("WeakerAccess")
+	public static ParsedPersistenceXmlDescriptor locateIndividualPersistenceUnit(URL persistenceXmlUrl, Map integration) {
+		return locateIndividualPersistenceUnit( persistenceXmlUrl, PersistenceUnitTransactionType.RESOURCE_LOCAL, integration );
+	}
+
+	/**
+	 * Parse a specific {@code persistence.xml} with the assumption that it defines a single
+	 * persistence-unit.
+	 *
+	 * @param persistenceXmlUrl The {@code persistence.xml} URL
+	 * @param transactionType The specific PersistenceUnitTransactionType to incorporate into the persistence-unit descriptor
+	 * @param integration The Map of integration settings
+	 *
+	 * @return The single persistence-unit descriptor
+	 */
+	@SuppressWarnings("WeakerAccess")
+	public static ParsedPersistenceXmlDescriptor locateIndividualPersistenceUnit(
+			URL persistenceXmlUrl,
+			PersistenceUnitTransactionType transactionType,
+			Map integration) {
+		final PersistenceXmlParser parser = new PersistenceXmlParser(
+				ClassLoaderServiceImpl.fromConfigSettings( integration ),
+				transactionType
+		);
+
+		parser.parsePersistenceXml( persistenceXmlUrl, integration );
+
+		assert parser.persistenceUnits.size() == 1;
+
+		return parser.persistenceUnits.values().iterator().next();
+	}
+
+	/**
+	 * Parse a specific {@code persistence.xml} and return the descriptor for the persistence-unit with matching name
+	 *
+	 * @param persistenceXmlUrl The {@code persistence.xml} URL
+	 * @param name The PU name to match
+	 *
+	 * @return The matching persistence-unit descriptor
+	 */
+	public static ParsedPersistenceXmlDescriptor locateNamedPersistenceUnit(URL persistenceXmlUrl, String name) {
+		return locateNamedPersistenceUnit( persistenceXmlUrl, name, Collections.emptyMap() );
+	}
+
+	/**
+	 * Parse a specific {@code persistence.xml} and return the descriptor for the persistence-unit with matching name
+	 *
+	 * @param persistenceXmlUrl The {@code persistence.xml} URL
+	 * @param name The PU name to match
+	 * @param integration The Map of integration settings
+	 *
+	 * @return The matching persistence-unit descriptor
+	 */
+	@SuppressWarnings("WeakerAccess")
+	public static ParsedPersistenceXmlDescriptor locateNamedPersistenceUnit(URL persistenceXmlUrl, String name, Map integration) {
+		return locateNamedPersistenceUnit( persistenceXmlUrl, name, PersistenceUnitTransactionType.RESOURCE_LOCAL, integration );
+	}
+
+	/**
+	 * Parse a specific {@code persistence.xml} and return the descriptor for the persistence-unit with matching name
+	 *
+	 * @param persistenceXmlUrl The {@code persistence.xml} URL
+	 * @param name The PU name to match
+	 * @param transactionType The specific PersistenceUnitTransactionType to incorporate into the persistence-unit descriptor
+	 * @param integration The Map of integration settings
+	 *
+	 * @return The matching persistence-unit descriptor
+	 */
+	@SuppressWarnings("WeakerAccess")
+	public static ParsedPersistenceXmlDescriptor locateNamedPersistenceUnit(
+			URL persistenceXmlUrl,
+			String name,
+			PersistenceUnitTransactionType transactionType,
+			Map integration) {
+		assert StringHelper.isNotEmpty( name );
+
+		final PersistenceXmlParser parser = new PersistenceXmlParser(
+				ClassLoaderServiceImpl.fromConfigSettings( integration ),
+				transactionType
+		);
+
+		parser.parsePersistenceXml( persistenceXmlUrl, integration );
+		assert parser.persistenceUnits.containsKey( name );
+
+		return parser.persistenceUnits.get( name );
+	}
+
+	/**
+	 * Intended only for use by Hibernate tests!
+	 * <p/>
+	 * Parses a specific persistence.xml file...
+	 */
+	public static Map<String, ParsedPersistenceXmlDescriptor> parse(
+			URL persistenceXmlUrl,
+			PersistenceUnitTransactionType transactionType) {
+		return parse( persistenceXmlUrl, transactionType, Collections.emptyMap() );
+	}
+
+	/**
+	 * Generic method to parse a specified {@code persistence.xml} and return a Map of descriptors
+	 * for all discovered persistence-units keyed by the PU name.
+	 *
+	 * @param persistenceXmlUrl The URL of the {@code persistence.xml} to parse
+	 * @param transactionType The specific PersistenceUnitTransactionType to incorporate into the persistence-unit descriptor
+	 * @param integration The Map of integration settings
+	 *
+	 * @return Map of persistence-unit descriptors keyed by the PU name
+	 */
+	public static Map<String, ParsedPersistenceXmlDescriptor> parse(
+			URL persistenceXmlUrl,
+			PersistenceUnitTransactionType transactionType,
+			Map integration) {
+		PersistenceXmlParser parser = new PersistenceXmlParser(
+				ClassLoaderServiceImpl.fromConfigSettings( integration ),
+				transactionType
+		);
+
+		parser.doResolve( integration );
+		return parser.persistenceUnits;
+	}
+
+	private final ClassLoaderService classLoaderService;
+	private final PersistenceUnitTransactionType defaultTransactionType;
+	private final Map<String, ParsedPersistenceXmlDescriptor> persistenceUnits;
+
+	private PersistenceXmlParser(ClassLoaderService classLoaderService, PersistenceUnitTransactionType defaultTransactionType) {
 		this.classLoaderService = classLoaderService;
 		this.defaultTransactionType = defaultTransactionType;
+		this.persistenceUnits = new ConcurrentHashMap<>();
 	}
 
-	public List<ParsedPersistenceXmlDescriptor> doResolve(Map integration) {
-		final List<ParsedPersistenceXmlDescriptor> persistenceUnits = new ArrayList<ParsedPersistenceXmlDescriptor>();
-
+	private void doResolve(Map integration) {
 		final List<URL> xmlUrls = classLoaderService.locateResources( "META-INF/persistence.xml" );
 		if ( xmlUrls.isEmpty() ) {
 			LOG.unableToFindPersistenceXmlInClasspath();
 		}
 		else {
-			for ( URL xmlUrl : xmlUrls ) {
-				persistenceUnits.addAll( parsePersistenceXml( xmlUrl, integration ) );
-			}
+			parsePersistenceXml( xmlUrls, integration );
 		}
-
-		return persistenceUnits;
 	}
 
-	private List<ParsedPersistenceXmlDescriptor> parsePersistenceXml(URL xmlUrl, Map integration) {
+	private void parsePersistenceXml(List<URL> xmlUrls, Map integration) {
+		for ( URL xmlUrl : xmlUrls ) {
+			parsePersistenceXml( xmlUrl, integration );
+		}
+	}
+
+	private void parsePersistenceXml(URL xmlUrl, Map integration) {
 		LOG.tracef( "Attempting to parse persistence.xml file : %s", xmlUrl.toExternalForm() );
 
 		final Document doc = loadUrl( xmlUrl );
 		final Element top = doc.getDocumentElement();
-
-		final List<ParsedPersistenceXmlDescriptor> persistenceUnits = new ArrayList<ParsedPersistenceXmlDescriptor>();
 
 		final NodeList children = top.getChildNodes();
 		for ( int i = 0; i < children.getLength() ; i++ ) {
@@ -106,20 +252,25 @@ public class PersistenceXmlParser {
 					ParsedPersistenceXmlDescriptor persistenceUnit = new ParsedPersistenceXmlDescriptor( puRootUrl );
 					bindPersistenceUnit( persistenceUnit, element );
 
+					if ( persistenceUnits.containsKey( persistenceUnit.getName() ) ) {
+						LOG.duplicatedPersistenceUnitName( persistenceUnit.getName() );
+						continue;
+					}
+
 					// per JPA spec, any settings passed in to PersistenceProvider bootstrap methods should override
 					// values found in persistence.xml
-					if ( integration.containsKey( AvailableSettings.PROVIDER ) ) {
-						persistenceUnit.setProviderClassName( (String) integration.get( AvailableSettings.PROVIDER ) );
+					if ( integration.containsKey( AvailableSettings.JPA_PERSISTENCE_PROVIDER ) ) {
+						persistenceUnit.setProviderClassName( (String) integration.get( AvailableSettings.JPA_PERSISTENCE_PROVIDER ) );
 					}
-					if ( integration.containsKey( AvailableSettings.TRANSACTION_TYPE ) ) {
-						String transactionType = (String) integration.get( AvailableSettings.TRANSACTION_TYPE );
+					if ( integration.containsKey( AvailableSettings.JPA_TRANSACTION_TYPE ) ) {
+						String transactionType = (String) integration.get( AvailableSettings.JPA_TRANSACTION_TYPE );
 						persistenceUnit.setTransactionType( parseTransactionType( transactionType ) );
 					}
-					if ( integration.containsKey( AvailableSettings.JTA_DATASOURCE ) ) {
-						persistenceUnit.setJtaDataSource( integration.get( AvailableSettings.JTA_DATASOURCE ) );
+					if ( integration.containsKey( AvailableSettings.JPA_JTA_DATASOURCE ) ) {
+						persistenceUnit.setJtaDataSource( integration.get( AvailableSettings.JPA_JTA_DATASOURCE ) );
 					}
-					if ( integration.containsKey( AvailableSettings.NON_JTA_DATASOURCE ) ) {
-						persistenceUnit.setNonJtaDataSource( integration.get( AvailableSettings.NON_JTA_DATASOURCE ) );
+					if ( integration.containsKey( AvailableSettings.JPA_NON_JTA_DATASOURCE ) ) {
+						persistenceUnit.setNonJtaDataSource( integration.get( AvailableSettings.JPA_NON_JTA_DATASOURCE ) );
 					}
 
 					decodeTransactionType( persistenceUnit );
@@ -127,11 +278,10 @@ public class PersistenceXmlParser {
 					Properties properties = persistenceUnit.getProperties();
 					ConfigurationHelper.overrideProperties( properties, integration );
 
-					persistenceUnits.add( persistenceUnit );
+					persistenceUnits.put( persistenceUnit.getName(), persistenceUnit );
 				}
 			}
 		}
-		return persistenceUnits;
 	}
 
 	private void decodeTransactionType(ParsedPersistenceXmlDescriptor persistenceUnit) {
@@ -219,7 +369,7 @@ public class PersistenceXmlParser {
 							}
 							String propName = propElement.getAttribute( "name" ).trim();
 							String propValue = propElement.getAttribute( "value" ).trim();
-							if ( StringHelper.isEmpty( propValue ) ) {
+							if ( propValue.isEmpty() ) {
 								//fall back to the natural (Hibernate) way of description
 								propValue = extractContent( propElement, "" );
 							}
@@ -280,8 +430,7 @@ public class PersistenceXmlParser {
 			URLConnection conn = xmlUrl.openConnection();
 			conn.setUseCaches( false ); //avoid JAR locking on Windows and Tomcat
 			try {
-				InputStream inputStream = conn.getInputStream();
-				try {
+				try (InputStream inputStream = conn.getInputStream()) {
 					final InputSource inputSource = new InputSource( inputStream );
 					try {
 						DocumentBuilder documentBuilder = documentBuilderFactory().newDocumentBuilder();
@@ -290,22 +439,15 @@ public class PersistenceXmlParser {
 							validate( document );
 							return document;
 						}
-						catch (SAXException e) {
-							throw new PersistenceException( "Unexpected error parsing [" + resourceName + "]", e );
-						}
-						catch (IOException e) {
+						catch (SAXException | IOException e) {
 							throw new PersistenceException( "Unexpected error parsing [" + resourceName + "]", e );
 						}
 					}
 					catch (ParserConfigurationException e) {
-						throw new PersistenceException( "Unable to generate javax.xml.parsers.DocumentBuilder instance", e );
-					}
-				}
-				finally {
-					try {
-						inputStream.close();
-					}
-					catch (Exception ignored) {
+						throw new PersistenceException(
+								"Unable to generate javax.xml.parsers.DocumentBuilder instance",
+								e
+						);
 					}
 				}
 			}
@@ -321,22 +463,10 @@ public class PersistenceXmlParser {
 	private void validate(Document document) {
 		// todo : add ability to disable validation...
 
-		final Validator validator;
 		final String version = document.getDocumentElement().getAttribute( "version" );
-		if ( "2.1".equals( version ) ) {
-			validator = v21Schema().newValidator();
-		}
-		else if ( "2.0".equals( version ) ) {
-			validator = v2Schema().newValidator();
-		}
-		else if ( "1.0".equals(  version ) ) {
-			validator = v1Schema().newValidator();
-		}
-		else {
-			throw new PersistenceException( "Unrecognized persistence.xml version [" + version + "]" );
-		}
+		final Validator validator = new ConfigXsdSupport().jpaXsd( version ).getSchema().newValidator();
 
-		List<SAXException> errors = new ArrayList<SAXException>();
+		List<SAXException> errors = new ArrayList<>();
 		validator.setErrorHandler( new ErrorHandlerImpl( errors ) );
 		try {
 			validator.validate( new DOMSource( document ) );
@@ -372,68 +502,6 @@ public class PersistenceXmlParser {
 		documentBuilderFactory.setNamespaceAware( true );
 		return documentBuilderFactory;
 	}
-
-	private Schema v21Schema;
-
-	private Schema v21Schema() {
-		if ( v21Schema == null ) {
-			v21Schema = resolveLocalSchema( "org/hibernate/jpa/persistence_2_1.xsd" );
-		}
-		return v21Schema;
-	}
-
-	private Schema v2Schema;
-
-	private Schema v2Schema() {
-		if ( v2Schema == null ) {
-			v2Schema = resolveLocalSchema( "org/hibernate/jpa/persistence_2_0.xsd" );
-		}
-		return v2Schema;
-	}
-
-	private Schema v1Schema;
-
-	private Schema v1Schema() {
-		if ( v1Schema == null ) {
-			v1Schema = resolveLocalSchema( "org/hibernate/jpa/persistence_1_0.xsd" );
-		}
-		return v1Schema;
-	}
-
-
-	private Schema resolveLocalSchema(String schemaName) {
-		// These XSD resources should be available on the Hibernate ClassLoader
-		final URL url = classLoaderService.locateResource( schemaName );
-		if ( url == null ) {
-			throw new XsdException( "Unable to locate schema [" + schemaName + "] via classpath", schemaName );
-		}
-		try {
-			InputStream schemaStream = url.openStream();
-			try {
-				StreamSource source = new StreamSource( url.openStream() );
-				SchemaFactory schemaFactory = SchemaFactory.newInstance( XMLConstants.W3C_XML_SCHEMA_NS_URI );
-				return schemaFactory.newSchema( source );
-			}
-			catch ( SAXException e ) {
-				throw new XsdException( "Unable to load schema [" + schemaName + "]", e, schemaName );
-			}
-			catch ( IOException e ) {
-				throw new XsdException( "Unable to load schema [" + schemaName + "]", e, schemaName );
-			}
-			finally {
-				try {
-					schemaStream.close();
-				}
-				catch ( IOException e ) {
-					LOG.debugf( "Problem closing schema stream [%s]", e.toString() );
-				}
-			}
-		}
-		catch ( IOException e ) {
-			throw new XsdException( "Stream error handling schema url [" + url.toExternalForm() + "]", schemaName );
-		}
-	}
-
 
 	public static class ErrorHandlerImpl implements ErrorHandler {
 		private List<SAXException> errors;

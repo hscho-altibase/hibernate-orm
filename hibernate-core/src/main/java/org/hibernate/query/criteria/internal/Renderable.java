@@ -10,11 +10,15 @@ package org.hibernate.query.criteria.internal;
 import org.hibernate.query.criteria.internal.compile.RenderingContext;
 
 /**
- * TODO : javadoc
+ * Contract for nodes in the JPA Criteria tree that can be rendered
+ * as part of criteria "compilation"
  *
  * @author Steve Ebersole
  */
 public interface Renderable {
-	public String render(RenderingContext renderingContext);
-	public String renderProjection(RenderingContext renderingContext);
+
+	/**
+	 * Perform the rendering, returning the rendition
+	 */
+	String render(RenderingContext renderingContext);
 }

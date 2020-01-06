@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.ListIterator;
 
 import org.hibernate.HibernateException;
+import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.loader.CollectionAliases;
 import org.hibernate.persister.collection.CollectionPersister;
@@ -50,6 +51,17 @@ public class PersistentList extends AbstractPersistentCollection implements List
 	 * Constructs a PersistentList.
 	 *
 	 * @param session The session
+	 * @deprecated {@link #PersistentList(SharedSessionContractImplementor)} should be used instead.
+	 */
+	@Deprecated
+	public PersistentList(SessionImplementor session) {
+		this( (SharedSessionContractImplementor) session );
+	}
+
+	/**
+	 * Constructs a PersistentList.
+	 *
+	 * @param session The session
 	 * @param list The raw list
 	 */
 	public PersistentList(SharedSessionContractImplementor session, List list) {
@@ -57,6 +69,18 @@ public class PersistentList extends AbstractPersistentCollection implements List
 		this.list = list;
 		setInitialized();
 		setDirectlyAccessible( true );
+	}
+
+	/**
+	 * Constructs a PersistentList.
+	 *
+	 * @param session The session
+	 * @param list The raw list
+	 * @deprecated {@link #PersistentList(SharedSessionContractImplementor, List)} should be used instead.
+	 */
+	@Deprecated
+	public PersistentList(SessionImplementor session, List list) {
+		this( (SharedSessionContractImplementor) session, list );
 	}
 
 	@Override
@@ -80,7 +104,7 @@ public class PersistentList extends AbstractPersistentCollection implements List
 	public boolean equalsSnapshot(CollectionPersister persister) throws HibernateException {
 		final Type elementType = persister.getElementType();
 		final List sn = (List) getSnapshot();
-		if ( sn.size()!=this.list.size() ) {
+		if ( sn.size() != this.list.size() ) {
 			return false;
 		}
 		final Iterator itr = list.iterator();
@@ -163,6 +187,7 @@ public class PersistentList extends AbstractPersistentCollection implements List
 		if ( exists == null ) {
 			initialize( true );
 			if ( list.remove( value ) ) {
+				elementRemoved = true;
 				dirty();
 				return true;
 			}
@@ -171,6 +196,7 @@ public class PersistentList extends AbstractPersistentCollection implements List
 			}
 		}
 		else if ( exists ) {
+			elementRemoved = true;
 			queueOperation( new SimpleRemove( value ) );
 			return true;
 		}
@@ -189,7 +215,7 @@ public class PersistentList extends AbstractPersistentCollection implements List
 	@Override
 	@SuppressWarnings("unchecked")
 	public boolean addAll(Collection values) {
-		if ( values.size()==0 ) {
+		if ( values.size() == 0 ) {
 			return false;
 		}
 		if ( !isOperationQueueEnabled() ) {
@@ -200,14 +226,14 @@ public class PersistentList extends AbstractPersistentCollection implements List
 			for ( Object value : values ) {
 				queueOperation( new SimpleAdd( value ) );
 			}
-			return values.size()>0;
+			return values.size() > 0;
 		}
 	}
 
 	@Override
 	@SuppressWarnings("unchecked")
 	public boolean addAll(int index, Collection coll) {
-		if ( coll.size()>0 ) {
+		if ( coll.size() > 0 ) {
 			write();
 			return list.addAll( index,  coll );
 		}
@@ -219,9 +245,10 @@ public class PersistentList extends AbstractPersistentCollection implements List
 	@Override
 	@SuppressWarnings("unchecked")
 	public boolean removeAll(Collection coll) {
-		if ( coll.size()>0 ) {
+		if ( coll.size() > 0 ) {
 			initialize( true );
 			if ( list.removeAll( coll ) ) {
+				elementRemoved = true;
 				dirty();
 				return true;
 			}
@@ -298,8 +325,10 @@ public class PersistentList extends AbstractPersistentCollection implements List
 			throw new ArrayIndexOutOfBoundsException( "negative index" );
 		}
 		final Object old = isPutQueueEnabled() ? readElementByIndex( index ) : UNKNOWN;
+		elementRemoved = true;
 		if ( old == UNKNOWN ) {
 			write();
+			dirty();
 			return list.remove( index );
 		}
 		else {

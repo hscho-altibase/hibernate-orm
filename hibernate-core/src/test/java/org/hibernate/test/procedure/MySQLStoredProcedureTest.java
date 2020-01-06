@@ -1,3 +1,9 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.test.procedure;
 
 import java.sql.CallableStatement;
@@ -22,14 +28,19 @@ import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
 import org.hibernate.procedure.ProcedureCall;
 import org.hibernate.result.Output;
 import org.hibernate.result.ResultSetOutput;
+import org.hibernate.type.StringType;
 
 import org.hibernate.testing.RequiresDialect;
+import org.hibernate.testing.TestForIssue;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import static org.hibernate.testing.transaction.TransactionUtil.doInJPA;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * @author Vlad Mihalcea
@@ -40,8 +51,8 @@ public class MySQLStoredProcedureTest extends BaseEntityManagerFunctionalTestCas
 	@Override
 	protected Class<?>[] getAnnotatedClasses() {
 		return new Class<?>[] {
-				Person.class,
-				Phone.class,
+			Person.class,
+			Phone.class,
 		};
 	}
 
@@ -54,51 +65,62 @@ public class MySQLStoredProcedureTest extends BaseEntityManagerFunctionalTestCas
 
 		try {
 			Session session = entityManager.unwrap( Session.class );
-			session.doWork( new Work() {
-				@Override
-				public void execute(Connection connection) throws SQLException {
-					Statement statement = null;
-					try {
-						statement = connection.createStatement();
-						statement.executeUpdate(
-								"CREATE PROCEDURE sp_count_phones (" +
-										"   IN personId INT, " +
-										"   OUT phoneCount INT " +
-										") " +
-										"BEGIN " +
-										"    SELECT COUNT(*) INTO phoneCount " +
-										"    FROM phone  " +
-										"    WHERE phone.person_id = personId; " +
-										"END"
-						);
-						statement.executeUpdate(
-								"CREATE PROCEDURE sp_phones(IN personId INT) " +
-										"BEGIN " +
-										"    SELECT *  " +
-										"    FROM phone   " +
-										"    WHERE person_id = personId;  " +
-										"END"
-						);
-						statement.executeUpdate(
-								"CREATE FUNCTION fn_count_phones(personId integer)  " +
-										"RETURNS integer " +
-										"DETERMINISTIC " +
-										"READS SQL DATA " +
-										"BEGIN " +
-										"    DECLARE phoneCount integer; " +
-										"    SELECT COUNT(*) INTO phoneCount " +
-										"    FROM phone  " +
-										"    WHERE phone.person_id = personId; " +
-										"    RETURN phoneCount; " +
-										"END"
-						);
-					} finally {
-						if ( statement != null ) {
-							statement.close();
-						}
+			session.doWork( connection -> {
+				Statement statement = null;
+				try {
+					statement = connection.createStatement();
+					statement.executeUpdate(
+						"CREATE PROCEDURE sp_count_phones (" +
+						"   IN personId INT, " +
+						"   OUT phoneCount INT " +
+						") " +
+						"BEGIN " +
+						"    SELECT COUNT(*) INTO phoneCount " +
+						"    FROM Phone p " +
+						"    WHERE p.person_id = personId; " +
+						"END"
+					);
+
+					statement.executeUpdate(
+						"CREATE PROCEDURE sp_phones(IN personId INT) " +
+						"BEGIN " +
+						"    SELECT *  " +
+						"    FROM Phone   " +
+						"    WHERE person_id = personId;  " +
+						"END"
+					);
+
+					statement.executeUpdate(
+						"CREATE FUNCTION fn_count_phones(personId integer)  " +
+						"RETURNS integer " +
+						"DETERMINISTIC " +
+						"READS SQL DATA " +
+						"BEGIN " +
+						"    DECLARE phoneCount integer; " +
+						"    SELECT COUNT(*) INTO phoneCount " +
+						"    FROM Phone p " +
+						"    WHERE p.person_id = personId; " +
+						"    RETURN phoneCount; " +
+						"END"
+					);
+
+					statement.executeUpdate(
+						"CREATE PROCEDURE sp_is_null (" +
+						"   IN param varchar(255), " +
+						"   OUT result tinyint(1) " +
+						") " +
+						"BEGIN " +
+						"    IF (param IS NULL) THEN SET result = true; " +
+						"    ELSE SET result = false; " +
+						"    END IF; " +
+						"END"
+					);
+				} finally {
+					if ( statement != null ) {
+						statement.close();
 					}
 				}
-			}  );
+			} );
 		}
 		finally {
 			entityManager.getTransaction().rollback();
@@ -140,16 +162,13 @@ public class MySQLStoredProcedureTest extends BaseEntityManagerFunctionalTestCas
 
 		try {
 			Session session = entityManager.unwrap( Session.class );
-			session.doWork( new Work() {
-				@Override
-				public void execute(Connection connection) throws SQLException {
-					try (Statement statement = connection.createStatement()) {
-						statement.executeUpdate( "DROP PROCEDURE IF EXISTS sp_count_phones" );
-					}
-					catch (SQLException ignore) {
-					}
+			session.doWork( connection -> {
+				try (Statement statement = connection.createStatement()) {
+					statement.executeUpdate( "DROP PROCEDURE IF EXISTS sp_count_phones" );
 				}
-			}  );
+				catch (SQLException ignore) {
+				}
+			} );
 		}
 		finally {
 			entityManager.getTransaction().rollback();
@@ -161,16 +180,13 @@ public class MySQLStoredProcedureTest extends BaseEntityManagerFunctionalTestCas
 
 		try {
 			Session session = entityManager.unwrap( Session.class );
-			session.doWork( new Work() {
-				@Override
-				public void execute(Connection connection) throws SQLException {
-					try (Statement statement = connection.createStatement()) {
-						statement.executeUpdate( "DROP PROCEDURE IF EXISTS sp_phones" );
-					}
-					catch (SQLException ignore) {
-					}
+			session.doWork( connection -> {
+				try (Statement statement = connection.createStatement()) {
+					statement.executeUpdate( "DROP PROCEDURE IF EXISTS sp_phones" );
 				}
-			}  );
+				catch (SQLException ignore) {
+				}
+			} );
 		}
 		finally {
 			entityManager.getTransaction().rollback();
@@ -182,16 +198,31 @@ public class MySQLStoredProcedureTest extends BaseEntityManagerFunctionalTestCas
 
 		try {
 			Session session = entityManager.unwrap( Session.class );
-			session.doWork( new Work() {
-				@Override
-				public void execute(Connection connection) throws SQLException {
-					try (Statement statement = connection.createStatement()) {
-						statement.executeUpdate( "DROP FUNCTION IF EXISTS fn_count_phones" );
-					}
-					catch (SQLException ignore) {
-					}
+			session.doWork( connection -> {
+				try (Statement statement = connection.createStatement()) {
+					statement.executeUpdate( "DROP FUNCTION IF EXISTS fn_count_phones" );
 				}
-			}  );
+				catch (SQLException ignore) {
+				}
+			} );
+		}
+		finally {
+			entityManager.getTransaction().rollback();
+			entityManager.close();
+		}
+
+		entityManager = createEntityManager();
+		entityManager.getTransaction().begin();
+
+		try {
+			Session session = entityManager.unwrap( Session.class );
+			session.doWork( connection -> {
+				try (Statement statement = connection.createStatement()) {
+					statement.executeUpdate( "DROP PROCEDURE IF EXISTS sp_is_null" );
+				}
+				catch (SQLException ignore) {
+				}
+			} );
 		}
 		finally {
 			entityManager.getTransaction().rollback();
@@ -335,5 +366,53 @@ public class MySQLStoredProcedureTest extends BaseEntityManagerFunctionalTestCas
 			entityManager.getTransaction().rollback();
 			entityManager.close();
 		}
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-12905")
+	public void testStoredProcedureNullParameter() {
+
+		doInJPA( this::entityManagerFactory, entityManager -> {
+			ProcedureCall procedureCall = entityManager.unwrap( Session.class ).createStoredProcedureCall("sp_is_null");
+			procedureCall.registerParameter( 1, StringType.class, ParameterMode.IN).enablePassingNulls( true);
+			procedureCall.registerParameter( 2, Boolean.class, ParameterMode.OUT);
+			procedureCall.setParameter(1, null);
+
+			Boolean result = (Boolean) procedureCall.getOutputParameterValue( 2 );
+
+			assertTrue( result );
+		});
+
+		doInJPA( this::entityManagerFactory, entityManager -> {
+			ProcedureCall procedureCall = entityManager.unwrap( Session.class ).createStoredProcedureCall("sp_is_null");
+			procedureCall.registerParameter( 1, StringType.class, ParameterMode.IN).enablePassingNulls( true);
+			procedureCall.registerParameter( 2, Boolean.class, ParameterMode.OUT);
+			procedureCall.setParameter(1, "test");
+
+			Boolean result = (Boolean) procedureCall.getOutputParameterValue( 2 );
+
+			assertFalse( result );
+		});
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-12905")
+	public void testStoredProcedureNullParameterHibernateWithoutEnablePassingNulls() {
+
+		doInJPA( this::entityManagerFactory, entityManager -> {
+			try {
+				ProcedureCall procedureCall = entityManager.unwrap( Session.class ).createStoredProcedureCall("sp_is_null");
+				procedureCall.registerParameter( 1, StringType.class, ParameterMode.IN);
+				procedureCall.registerParameter( 2, Boolean.class, ParameterMode.OUT);
+				procedureCall.setParameter(1, null);
+
+				procedureCall.getOutputParameterValue( 2 );
+
+				fail("Should have thrown exception");
+			}
+			catch (IllegalArgumentException e) {
+				assertEquals( "The parameter at position [1] was null. You need to call ParameterRegistration#enablePassingNulls(true) in order to pass null parameters.", e.getMessage() );
+			}
+		});
 	}
 }

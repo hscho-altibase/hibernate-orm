@@ -6,6 +6,7 @@
  */
 package org.hibernate;
 
+import java.io.Closeable;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Blob;
@@ -30,7 +31,7 @@ import org.hibernate.type.Type;
  *
  * @author Gavin King
  */
-public interface ScrollableResults extends AutoCloseable {
+public interface ScrollableResults extends AutoCloseable, Closeable {
 
 	/**
 	 * Release resources immediately.
@@ -75,13 +76,13 @@ public interface ScrollableResults extends AutoCloseable {
 	boolean first();
 
 	/**
-	 * Go to a location just beforeQuery first result,  This is the location of the cursor on a newly returned
+	 * Go to a location just before first result,  This is the location of the cursor on a newly returned
 	 * scrollable result.
 	 */
 	void beforeFirst();
 
 	/**
-	 * Go to a location just afterQuery the last result.
+	 * Go to a location just after the last result.
 	 */
 	void afterLast();
 

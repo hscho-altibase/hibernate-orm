@@ -53,13 +53,13 @@ import org.hibernate.dialect.HSQLDialect;
 import org.hibernate.dialect.InterbaseDialect;
 import org.hibernate.dialect.MckoiDialect;
 import org.hibernate.dialect.MySQLDialect;
+import org.hibernate.dialect.Oracle12cDialect;
 import org.hibernate.dialect.Oracle8iDialect;
 import org.hibernate.dialect.PointbaseDialect;
 import org.hibernate.dialect.PostgreSQL81Dialect;
 import org.hibernate.dialect.PostgreSQLDialect;
 import org.hibernate.dialect.SAPDBDialect;
-import org.hibernate.dialect.Sybase11Dialect;
-import org.hibernate.dialect.SybaseASE15Dialect;
+import org.hibernate.dialect.SQLServerDialect;
 import org.hibernate.dialect.SybaseDialect;
 import org.hibernate.dialect.TeradataDialect;
 import org.hibernate.dialect.TimesTenDialect;
@@ -90,8 +90,8 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@RequiresDialectFeature(DialectChecks.SupportsNoColumnInsert.class)
 public class FooBarTest extends LegacyTestCase {
-	private static final Logger log = Logger.getLogger( FooBarTest.class );
 
 	@Override
 	public String[] getMappings() {
@@ -1376,6 +1376,7 @@ public class FooBarTest extends LegacyTestCase {
 	}
 
 	@Test
+	@SkipForDialect( value = H2Dialect.class, comment = "Feature not supported: MVCC=TRUE && FOR UPDATE && JOIN")
 	public void testQueryLockMode() throws Exception {
 		Session s = openSession();
 		Transaction tx = s.beginTransaction();
@@ -1646,7 +1647,7 @@ public class FooBarTest extends LegacyTestCase {
 			count++;
 		}
 		assertEquals(4, count);
-		iter = s.createQuery("select distinct foo from Foo foo")
+		iter = s.createQuery("select foo from Foo foo")
 			.setMaxResults(2)
 			.setFirstResult(2)
 			.list()
@@ -1657,7 +1658,7 @@ public class FooBarTest extends LegacyTestCase {
 			count++;
 		}
 		assertTrue(count==2);
-		iter = s.createQuery("select distinct foo from Foo foo")
+		iter = s.createQuery("select foo from Foo foo")
 		.setMaxResults(3)
 		.list()
 		.iterator();
@@ -1768,7 +1769,7 @@ public class FooBarTest extends LegacyTestCase {
 
 		try {
 			q.setParameterList("nameList", (Collection)null);
-			fail("Should throw an queryexception when passing a null!");
+			fail("Should throw a QueryException when passing a null!");
 		}
 		catch (IllegalArgumentException qe) {
 			//should happen
@@ -2287,7 +2288,12 @@ public class FooBarTest extends LegacyTestCase {
 			s.createQuery( "select count(*) from Baz as baz where 1 in indices(baz.fooArray)" ).list();
 			s.createQuery( "select count(*) from Bar as bar where 'abc' in elements(bar.baz.fooArray)" ).list();
 			s.createQuery( "select count(*) from Bar as bar where 1 in indices(bar.baz.fooArray)" ).list();
-			if ( !(getDialect() instanceof DB2Dialect) &&  !(getDialect() instanceof Oracle8iDialect ) && !( getDialect() instanceof SybaseDialect ) && !( getDialect() instanceof Sybase11Dialect ) && !( getDialect() instanceof SybaseASE15Dialect ) && !( getDialect() instanceof PostgreSQLDialect ) && !(getDialect() instanceof PostgreSQL81Dialect) && !(getDialect() instanceof AbstractHANADialect)) {
+			if ( !(getDialect() instanceof DB2Dialect) &&
+					!( getDialect() instanceof Oracle8iDialect ) &&
+					!( SybaseDialect.class.isAssignableFrom( getDialect().getClass() ) ) &&
+					!( SQLServerDialect.class.isAssignableFrom( getDialect().getClass() ) ) &&
+					!( getDialect() instanceof PostgreSQLDialect ) && !(getDialect() instanceof PostgreSQL81Dialect ) &&
+					!( getDialect() instanceof AbstractHANADialect) ) {
 				// SybaseAnywhereDialect supports implicit conversions from strings to ints
 				s.createQuery(
 						"select count(*) from Bar as bar, bar.component.glarch.proxyArray as g where g.id in indices(bar.baz.fooArray)"
@@ -2515,7 +2521,9 @@ public class FooBarTest extends LegacyTestCase {
 			).list();
 			assertTrue( "collection.elements find", list.size()==2 );
 		}
-		if (!(getDialect() instanceof SAPDBDialect) ) { // SAPDB doesn't like distinct with binary type
+		// SAPDB doesn't like distinct with binary type
+		// Oracle12cDialect stores binary types as blobs and do no support distinct on blobs
+		if ( !(getDialect() instanceof SAPDBDialect) && !(getDialect() instanceof Oracle12cDialect) ) {
 			List list = s.createQuery( "select distinct foo from Baz baz join baz.fooArray foo" ).list();
 			assertTrue( "collection.elements find", list.size()==2 );
 		}
@@ -3304,7 +3312,7 @@ public class FooBarTest extends LegacyTestCase {
 		assertTrue( g.getStrings().size()==1 );
 		assertTrue( g.getProxyArray().length==1 );
 		assertTrue( g.getProxySet().size()==1 );
-		assertTrue( "versioned collection beforeQuery", g.getVersion() == 1 );
+		assertTrue( "versioned collection before", g.getVersion() == 1 );
 		s.getTransaction().commit();
 		s.close();
 
@@ -3314,14 +3322,14 @@ public class FooBarTest extends LegacyTestCase {
 		assertTrue( g.getStrings().get(0).equals("foo") );
 		assertTrue( g.getProxyArray()[0]==g );
 		assertTrue( g.getProxySet().iterator().next()==g );
-		assertTrue( "versioned collection beforeQuery", g.getVersion() == 1 );
+		assertTrue( "versioned collection before", g.getVersion() == 1 );
 		s.getTransaction().commit();
 		s.close();
 
 		s = openSession();
 		s.beginTransaction();
 		g = (GlarchProxy) s.load(Glarch.class, gid);
-		assertTrue( "versioned collection beforeQuery", g.getVersion() == 1 );
+		assertTrue( "versioned collection before", g.getVersion() == 1 );
 		g.getStrings().add( "bar" );
 		s.getTransaction().commit();
 		s.close();
@@ -3329,8 +3337,8 @@ public class FooBarTest extends LegacyTestCase {
 		s = openSession();
 		s.beginTransaction();
 		g = (GlarchProxy) s.load(Glarch.class, gid);
-		assertTrue( "versioned collection afterQuery", g.getVersion()==2 );
-		assertTrue( "versioned collection afterQuery", g.getStrings().size() == 2 );
+		assertTrue( "versioned collection after", g.getVersion()==2 );
+		assertTrue( "versioned collection after", g.getStrings().size() == 2 );
 		g.setProxyArray( null );
 		s.getTransaction().commit();
 		s.close();
@@ -3338,8 +3346,8 @@ public class FooBarTest extends LegacyTestCase {
 		s = openSession();
 		s.beginTransaction();
 		g = (GlarchProxy) s.load(Glarch.class, gid);
-		assertTrue( "versioned collection afterQuery", g.getVersion()==3 );
-		assertTrue( "versioned collection afterQuery", g.getProxyArray().length == 0 );
+		assertTrue( "versioned collection after", g.getVersion()==3 );
+		assertTrue( "versioned collection after", g.getProxyArray().length == 0 );
 		g.setFooComponents( new ArrayList() );
 		g.setProxyArray( null );
 		s.getTransaction().commit();
@@ -3348,7 +3356,7 @@ public class FooBarTest extends LegacyTestCase {
 		s = openSession();
 		s.beginTransaction();
 		g = (GlarchProxy) s.load(Glarch.class, gid);
-		assertTrue( "versioned collection afterQuery", g.getVersion()==4 );
+		assertTrue( "versioned collection after", g.getVersion()==4 );
 		s.delete(g);
 		s.flush();
 		assertTrue( s.createQuery( "from java.lang.Object" ).list().size()==0 );
@@ -4014,7 +4022,7 @@ public class FooBarTest extends LegacyTestCase {
 		finally {
 			s.close();
 		}
-		assertTrue( "lazy collection should have blown in the beforeQuery trans completion", ok );
+		assertTrue( "lazy collection should have blown in the before trans completion", ok );
 
 		s = openSession();
 		s.beginTransaction();
@@ -4025,6 +4033,7 @@ public class FooBarTest extends LegacyTestCase {
 	}
 
 	@SkipForDialect(value = AbstractHANADialect.class, comment = "HANA currently requires specifying table name by 'FOR UPDATE of t1.c1' if there are more than one tables/views/subqueries in the FROM clause")
+	@SkipForDialect( value = H2Dialect.class, comment = "Feature not supported: MVCC=TRUE && FOR UPDATE && JOIN")
 	@Test
 	public void testNewSessionLifecycle() throws Exception {
 		Session s = openSession();
@@ -4053,6 +4062,7 @@ public class FooBarTest extends LegacyTestCase {
 		}
 		catch (Exception e) {
 			s.getTransaction().rollback();
+			throw e;
 		}
 		finally {
 			s.close();
@@ -4304,6 +4314,7 @@ public class FooBarTest extends LegacyTestCase {
 	}
 
 	@SkipForDialect(value = AbstractHANADialect.class, comment = "HANA currently requires specifying table name by 'FOR UPDATE of t1.c1' if there are more than one tables/views/subqueries in the FROM clause")
+	@SkipForDialect( value = H2Dialect.class, comment = "Feature not supported: MVCC=TRUE && FOR UPDATE && JOIN")
 	@Test
 	public void testRefresh() throws Exception {
 		final Session s = openSession();
@@ -4323,7 +4334,10 @@ public class FooBarTest extends LegacyTestCase {
 		);
 		s.refresh(foo);
 		assertEquals( Long.valueOf( -3l ), foo.getLong() );
-		assertEquals( LockMode.READ, s.getCurrentLockMode( foo ) );
+		// NOTE : this test used to test for LockMode.READ here, but that actually highlights a bug
+		//		`foo` has just been inserted and then updated in this same Session - its lock mode
+		//		therefore ought to be WRITE.  See https://hibernate.atlassian.net/browse/HHH-12257
+		assertEquals( LockMode.WRITE, s.getCurrentLockMode( foo ) );
 		s.refresh(foo, LockMode.UPGRADE);
 		if ( getDialect().supportsOuterJoinForUpdate() ) {
 			assertEquals( LockMode.UPGRADE, s.getCurrentLockMode( foo ) );

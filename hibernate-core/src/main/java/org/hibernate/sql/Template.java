@@ -88,6 +88,16 @@ public final class Template {
 
 	private Template() {}
 
+	public static String renderTransformerReadFragment(
+			String fragment,
+			String... columnNames) {
+		// NOTE : would need access to SessionFactoryImplementor to make this configurable
+		for ( String columnName : columnNames ) {
+			fragment = fragment.replace( columnName, TEMPLATE + '.' + columnName );
+		}
+		return fragment;
+	}
+
 	public static String renderWhereStringTemplate(String sqlWhereString, Dialect dialect, SQLFunctionRegistry functionRegistry) {
 		return renderWhereStringTemplate(sqlWhereString, TEMPLATE, dialect, functionRegistry);
 	}
@@ -667,7 +677,7 @@ public final class Template {
 		).injectAliases( LEGACY_ORDER_BY_ALIAS_RESOLVER );
 	}
 
-	public static OrderByAliasResolver LEGACY_ORDER_BY_ALIAS_RESOLVER = new OrderByAliasResolver() {
+	public static final OrderByAliasResolver LEGACY_ORDER_BY_ALIAS_RESOLVER = new OrderByAliasResolver() {
 		@Override
 		public String resolveTableAlias(String columnReference) {
 			return TEMPLATE;
@@ -736,7 +746,7 @@ public final class Template {
 	}
 
 	private static boolean isFunction(String lcToken, String nextToken, SQLFunctionRegistry functionRegistry) {
-		// checking for "(" is currently redundant because it is checked beforeQuery getting here;
+		// checking for "(" is currently redundant because it is checked before getting here;
 		// doing the check anyhow, in case that earlier check goes away;
 		if ( "(".equals( nextToken ) ) {
 			return true;

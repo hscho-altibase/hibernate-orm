@@ -13,8 +13,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Map;
 
+import org.hibernate.Hibernate;
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
+import org.hibernate.bytecode.enhance.spi.LazyPropertyInitializer;
 import org.hibernate.engine.jdbc.Size;
 import org.hibernate.engine.spi.Mapping;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
@@ -37,7 +39,7 @@ public abstract class AbstractStandardBasicType<T>
 	private static final Size DEFAULT_SIZE = new Size( 19, 2, 255, Size.LobMultiplier.NONE ); // to match legacy behavior
 	private final Size dictatedSize = new Size();
 
-	// Don't use final here.  Need to initialize afterQuery-the-fact
+	// Don't use final here.  Need to initialize after-the-fact
 	// by DynamicParameterizedTypes.
 	private SqlTypeDescriptor sqlTypeDescriptor;
 	private JavaTypeDescriptor<T> javaTypeDescriptor;
@@ -69,10 +71,7 @@ public abstract class AbstractStandardBasicType<T>
 	}
 
 	protected T getReplacement(T original, T target, SharedSessionContractImplementor session) {
-		if ( !isMutable() ) {
-			return original;
-		}
-		else if ( isEqual( original, target ) ) {
+		if ( !isMutable() || ( target != null && isEqual( original, target ) ) ) {
 			return original;
 		}
 		else {
@@ -88,7 +87,7 @@ public abstract class AbstractStandardBasicType<T>
 	@Override
 	public String[] getRegistrationKeys() {
 		return registerUnderJavaType()
-				? new String[] { getName(), javaTypeDescriptor.getJavaTypeClass().getName() }
+				? new String[] { getName(), javaTypeDescriptor.getJavaType().getName() }
 				: new String[] { getName() };
 	}
 
@@ -103,13 +102,13 @@ public abstract class AbstractStandardBasicType<T>
 	protected Size getDictatedSize() {
 		return dictatedSize;
 	}
-	
+
 	// final implementations ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	public final JavaTypeDescriptor<T> getJavaTypeDescriptor() {
 		return javaTypeDescriptor;
 	}
-	
+
 	public final void setJavaTypeDescriptor( JavaTypeDescriptor<T> javaTypeDescriptor ) {
 		this.javaTypeDescriptor = javaTypeDescriptor;
 	}
@@ -125,7 +124,7 @@ public abstract class AbstractStandardBasicType<T>
 
 	@Override
 	public final Class getReturnedClass() {
-		return javaTypeDescriptor.getJavaTypeClass();
+		return javaTypeDescriptor.getJavaType();
 	}
 
 	@Override
@@ -288,6 +287,9 @@ public abstract class AbstractStandardBasicType<T>
 	@Override
 	@SuppressWarnings({ "unchecked" })
 	public final String toLoggableString(Object value, SessionFactoryImplementor factory) {
+		if ( value == LazyPropertyInitializer.UNFETCHED_PROPERTY || !Hibernate.isInitialized( value ) ) {
+			return  "<uninitialized>";
+		}
 		return javaTypeDescriptor.extractLoggableRepresentation( (T) value );
 	}
 
@@ -345,6 +347,10 @@ public abstract class AbstractStandardBasicType<T>
 	@Override
 	@SuppressWarnings({ "unchecked" })
 	public final Object replace(Object original, Object target, SharedSessionContractImplementor session, Object owner, Map copyCache) {
+		if ( original == null && target == null ) {
+			return null;
+		}
+
 		return getReplacement( (T) original, (T) target, session );
 	}
 

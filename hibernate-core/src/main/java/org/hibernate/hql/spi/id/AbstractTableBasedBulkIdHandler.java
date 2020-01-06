@@ -15,7 +15,6 @@ import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.hql.internal.ast.HqlSqlWalker;
 import org.hibernate.hql.internal.ast.SqlGenerator;
-import org.hibernate.internal.util.StringHelper;
 import org.hibernate.param.ParameterSpecification;
 import org.hibernate.persister.entity.Queryable;
 import org.hibernate.sql.InsertSelect;
@@ -128,6 +127,22 @@ public abstract class AbstractTableBasedBulkIdHandler {
 			ProcessedWhereClause whereClause) {
 
 		final Dialect dialect = sessionFactory.getJdbcServices().getJdbcEnvironment().getDialect();
+		final Select select = generateIdSelect( tableAlias, whereClause );
+
+		InsertSelect insert = new InsertSelect( dialect );
+		if ( sessionFactory.getSessionFactoryOptions().isCommentsEnabled() ) {
+			insert.setComment( "insert-select for " + getTargetedQueryable().getEntityName() + " ids" );
+		}
+		insert.setTableName( idTableInfo.getQualifiedIdTableName() );
+		insert.setSelect( select );
+		return insert.toStatementString();
+	}
+
+	protected Select generateIdSelect(
+			String tableAlias,
+			ProcessedWhereClause whereClause) {
+
+		final Dialect dialect = sessionFactory.getJdbcServices().getJdbcEnvironment().getDialect();
 
 		final Select select = new Select( dialect );
 		final SelectValues selectClause = new SelectValues( dialect ).addColumns(
@@ -160,14 +175,7 @@ public abstract class AbstractTableBasedBulkIdHandler {
 			}
 		}
 		select.setWhereClause( whereJoinFragment + whereClause.getUserWhereClauseFragment() );
-
-		InsertSelect insert = new InsertSelect( dialect );
-		if ( sessionFactory.getSessionFactoryOptions().isCommentsEnabled() ) {
-			insert.setComment( "insert-select for " + getTargetedQueryable().getEntityName() + " ids" );
-		}
-		insert.setTableName( idTableInfo.getQualifiedIdTableName() );
-		insert.setSelect( select );
-		return insert.toStatementString();
+		return select;
 	}
 
 	/**
@@ -181,7 +189,7 @@ public abstract class AbstractTableBasedBulkIdHandler {
 	}
 
 	protected String generateIdSubselect(Queryable persister, IdTableInfo idTableInfo) {
-		return "select " + StringHelper.join( ", ", persister.getIdentifierColumnNames() ) +
+		return "select " + String.join( ", ", persister.getIdentifierColumnNames() ) +
 				" from " + idTableInfo.getQualifiedIdTableName();
 	}
 

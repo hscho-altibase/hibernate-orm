@@ -9,6 +9,7 @@ package org.hibernate.test.temporal;
 import java.sql.Time;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
@@ -20,6 +21,8 @@ import org.junit.Test;
 
 import org.hibernate.Query;
 import org.hibernate.Session;
+import org.hibernate.dialect.SQLServerDialect;
+
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 
 import static junit.framework.Assert.assertEquals;
@@ -34,7 +37,11 @@ public class TimePropertyTest extends BaseCoreFunctionalTestCase {
 	@Test
 	public void testTimeAsDate() {
 		final Entity eOrig = new Entity();
-		eOrig.tAsDate = new Time( new Date().getTime() );
+		Calendar calendar = Calendar.getInstance();
+		// See javadoc for java.sql.Time: 'The date components should be set to the "zero epoch" value of January 1, 1970 and should not be accessed'
+		// Other dates can potentially lead to errors in JDBC drivers, in particular MySQL ConnectorJ 8.x.
+		calendar.set( 1970, Calendar.JANUARY, 1 );
+		eOrig.tAsDate = new Time( calendar.getTimeInMillis() );
 
 		Session s = openSession();
 		s.getTransaction().begin();
@@ -55,7 +62,14 @@ public class TimePropertyTest extends BaseCoreFunctionalTestCase {
 
 		s = openSession();
 		s.getTransaction().begin();
-		final Query queryWithParameter = s.createQuery( "from TimePropertyTest$Entity where tAsDate=?" ).setParameter( 0, eGotten.tAsDate );
+
+		String queryString = "from TimePropertyTest$Entity where tAsDate = ?1";
+
+		if( SQLServerDialect.class.isAssignableFrom( getDialect().getClass() )) {
+			queryString = "from TimePropertyTest$Entity where tAsDate = cast ( ?1 as time )";
+		}
+
+		final Query queryWithParameter = s.createQuery( queryString ).setParameter( 1, eGotten.tAsDate );
 		final Entity eQueriedWithParameter = (Entity) queryWithParameter.uniqueResult();
 		assertNotNull( eQueriedWithParameter );
 		s.getTransaction().commit();
@@ -63,7 +77,8 @@ public class TimePropertyTest extends BaseCoreFunctionalTestCase {
 
 		s = openSession();
 		s.getTransaction().begin();
-		final Query query = s.createQuery( "from TimePropertyTest$Entity where tAsDate=?" ).setTime( 0, eGotten.tAsDate );
+
+		final Query query = s.createQuery( queryString ).setTime( 1, eGotten.tAsDate );
 		final Entity eQueried = (Entity) query.uniqueResult();
 		assertNotNull( eQueried );
 		s.getTransaction().commit();

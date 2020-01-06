@@ -7,7 +7,6 @@
 package org.hibernate.type;
 
 import java.io.Serializable;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
@@ -17,10 +16,9 @@ import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
 import org.hibernate.engine.internal.ForeignKeys;
 import org.hibernate.engine.jdbc.Size;
-import org.hibernate.engine.spi.EntityKey;
-import org.hibernate.engine.spi.Mapping;
-import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.engine.spi.*;
 import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.persister.entity.Loadable;
 
 /**
  * A many-to-one association to an entity.
@@ -28,6 +26,7 @@ import org.hibernate.persister.entity.EntityPersister;
  * @author Gavin King
  */
 public class ManyToOneType extends EntityType {
+	private final String propertyName;
 	private final boolean ignoreNotFound;
 	private boolean isLogicalOneToOne;
 
@@ -55,7 +54,7 @@ public class ManyToOneType extends EntityType {
 
 
 	/**
-	 * @deprecated Use {@link #ManyToOneType(TypeFactory.TypeScope, String, boolean, String, boolean, boolean, boolean, boolean ) } instead.
+	 * @deprecated Use {@link #ManyToOneType(TypeFactory.TypeScope, String, boolean, String, String, boolean, boolean, boolean, boolean ) } instead.
 	 */
 	@Deprecated
 	public ManyToOneType(
@@ -70,6 +69,10 @@ public class ManyToOneType extends EntityType {
 		this( scope, referencedEntityName, uniqueKeyPropertyName == null, uniqueKeyPropertyName, lazy, unwrapProxy, ignoreNotFound, isLogicalOneToOne );
 	}
 
+	/**
+	 * @deprecated Use {@link #ManyToOneType(TypeFactory.TypeScope, String, boolean, String, String, boolean, boolean, boolean, boolean ) } instead.
+	 */
+	@Deprecated
 	public ManyToOneType(
 			TypeFactory.TypeScope scope,
 			String referencedEntityName,
@@ -79,14 +82,40 @@ public class ManyToOneType extends EntityType {
 			boolean unwrapProxy,
 			boolean ignoreNotFound,
 			boolean isLogicalOneToOne) {
+		this( scope, referencedEntityName, referenceToPrimaryKey, uniqueKeyPropertyName, null, lazy, unwrapProxy, ignoreNotFound, isLogicalOneToOne );
+	}
+
+	public ManyToOneType(
+			TypeFactory.TypeScope scope,
+			String referencedEntityName,
+			boolean referenceToPrimaryKey,
+			String uniqueKeyPropertyName,
+			String propertyName,
+			boolean lazy,
+			boolean unwrapProxy,
+			boolean ignoreNotFound,
+			boolean isLogicalOneToOne) {
 		super( scope, referencedEntityName, referenceToPrimaryKey, uniqueKeyPropertyName, !lazy, unwrapProxy );
+		this.propertyName = propertyName;
 		this.ignoreNotFound = ignoreNotFound;
 		this.isLogicalOneToOne = isLogicalOneToOne;
 	}
 
+	public ManyToOneType(ManyToOneType original, String superTypeEntityName) {
+		super( original, superTypeEntityName );
+		this.propertyName = original.propertyName;
+		this.ignoreNotFound = original.ignoreNotFound;
+		this.isLogicalOneToOne = original.isLogicalOneToOne;
+	}
+
 	@Override
-	protected boolean isNullable() {
+	public boolean isNullable() {
 		return ignoreNotFound;
+	}
+
+	@Override
+	public String getPropertyName() {
+		return propertyName;
 	}
 
 	@Override
@@ -113,18 +142,6 @@ public class ManyToOneType extends EntityType {
 		return requireIdentifierOrUniqueKeyType( mapping ).getColumnSpan( mapping );
 	}
 
-	private Type requireIdentifierOrUniqueKeyType(Mapping mapping) {
-		final Type fkTargetType = getIdentifierOrUniqueKeyType( mapping );
-		if ( fkTargetType == null ) {
-			throw new MappingException(
-					"Unable to determine FK target Type for many-to-one mapping: " +
-							"referenced-entity-name=[" + getAssociatedEntityName() +
-							"], referenced-entity-attribute-name=[" + getLHSPropertyName() + "]"
-			);
-		}
-		return fkTargetType;
-	}
-
 	@Override
 	public int[] sqlTypes(Mapping mapping) throws MappingException {
 		return requireIdentifierOrUniqueKeyType( mapping ).sqlTypes( mapping );
@@ -141,27 +158,6 @@ public class ManyToOneType extends EntityType {
 	}
 
 	@Override
-	public void nullSafeSet(
-			PreparedStatement st,
-			Object value,
-			int index,
-			boolean[] settable,
-			SharedSessionContractImplementor session) throws HibernateException, SQLException {
-		requireIdentifierOrUniqueKeyType( session.getFactory() )
-				.nullSafeSet( st, getIdentifier( value, session ), index, settable, session );
-	}
-
-	@Override
-	public void nullSafeSet(
-			PreparedStatement st,
-			Object value,
-			int index,
-			SharedSessionContractImplementor session) throws HibernateException, SQLException {
-		requireIdentifierOrUniqueKeyType( session.getFactory() )
-				.nullSafeSet( st, getIdentifier( value, session ), index, session );
-	}
-
-	@Override
 	public ForeignKeyDirection getForeignKeyDirection() {
 		return ForeignKeyDirection.FROM_PARENT;
 	}
@@ -175,8 +171,25 @@ public class ManyToOneType extends EntityType {
 		// return the (fully resolved) identifier value, but do not resolve
 		// to the actual referenced entity instance
 		// NOTE: the owner of the association is not really the owner of the id!
-		final Serializable id = (Serializable) getIdentifierOrUniqueKeyType( session.getFactory() )
-				.nullSafeGet( rs, names, session, null );
+
+		// First hydrate the ID to check if it is null.
+		// Don't bother resolving the ID if hydratedKeyState[i] is null.
+
+		// Implementation note: if id is a composite ID, then resolving a null value will
+		// result in instantiating an empty composite if AvailableSettings#CREATE_EMPTY_COMPOSITES_ENABLED
+		// is true. By not resolving a null value for a composite ID, we avoid the overhead of instantiating
+		// an empty composite, checking if it is equivalent to null (it should be), then ultimately throwing
+		// out the empty value.
+		final Object hydratedId = getIdentifierOrUniqueKeyType( session.getFactory() )
+				.hydrate( rs, names, session, null );
+		final Serializable id;
+		if ( hydratedId != null ) {
+			id = (Serializable) getIdentifierOrUniqueKeyType( session.getFactory() )
+					.resolve( hydratedId, session, null );
+		}
+		else {
+			id = null;
+		}
 		scheduleBatchLoadIfNeeded( id, session );
 		return id;
 	}
@@ -191,8 +204,9 @@ public class ManyToOneType extends EntityType {
 			final EntityPersister persister = getAssociatedEntityPersister( session.getFactory() );
 			if ( persister.isBatchLoadable() ) {
 				final EntityKey entityKey = session.generateEntityKey( id, persister );
-				if ( !session.getPersistenceContext().containsEntity( entityKey ) ) {
-					session.getPersistenceContext().getBatchFetchQueue().addBatchLoadableEntityKey( entityKey );
+				final PersistenceContext persistenceContext = session.getPersistenceContextInternal();
+				if ( !persistenceContext.containsEntity( entityKey ) ) {
+					persistenceContext.getBatchFetchQueue().addBatchLoadableEntityKey( entityKey );
 				}
 			}
 		}
@@ -219,6 +233,28 @@ public class ManyToOneType extends EntityType {
 		// the ids are fully resolved, so compare them with isDirty(), not isModified()
 		return getIdentifierOrUniqueKeyType( session.getFactory() )
 				.isDirty( old, getIdentifier( current, session ), session );
+	}
+
+	@Override
+	public Object resolve(Object value, SharedSessionContractImplementor session, Object owner, Boolean overridingEager) throws HibernateException {
+		Object resolvedValue = super.resolve(value, session, owner, overridingEager);
+		if ( isLogicalOneToOne && value != null && getPropertyName() != null ) {
+			final PersistenceContext persistenceContext = session.getPersistenceContextInternal();
+			EntityEntry entry = persistenceContext.getEntry( owner );
+			if ( entry != null ) {
+				final Loadable ownerPersister = (Loadable) session.getFactory().getMetamodel().entityPersister( entry.getEntityName() );
+				EntityUniqueKey entityKey = new EntityUniqueKey(
+						ownerPersister.getEntityName(),
+						getPropertyName(),
+						value,
+						this,
+						ownerPersister.getEntityMode(),
+						session.getFactory()
+				);
+				persistenceContext.addEntity( entityKey, owner );
+			}
+		}
+		return resolvedValue;
 	}
 
 	@Override

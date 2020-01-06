@@ -9,6 +9,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.hibernate.MappingException;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.type.LiteralType;
 
@@ -37,12 +38,12 @@ public class Insert {
 	}
 
 	public Insert addColumn(String columnName) {
-		return addColumn(columnName, "?");
+		return addColumn( columnName, "?" );
 	}
 
 	public Insert addColumns(String[] columnNames) {
-		for ( int i=0; i<columnNames.length; i++ ) {
-			addColumn( columnNames[i] );
+		for ( String columnName : columnNames ) {
+			addColumn( columnName );
 		}
 		return this;
 	}
@@ -66,12 +67,12 @@ public class Insert {
 	}
 
 	public Insert addColumn(String columnName, String valueExpression) {
-		columns.put(columnName, valueExpression);
+		columns.put( columnName, valueExpression );
 		return this;
 	}
 
 	public Insert addColumn(String columnName, Object value, LiteralType type) throws Exception {
-		return addColumn( columnName, type.objectToSQLString(value, dialect) );
+		return addColumn( columnName, type.objectToSQLString( value, dialect ) );
 	}
 
 	public Insert addIdentityColumn(String columnName) {
@@ -95,7 +96,18 @@ public class Insert {
 		buf.append("insert into ")
 			.append(tableName);
 		if ( columns.size()==0 ) {
-			buf.append(' ').append( dialect.getNoColumnsInsertString() );
+			if ( dialect.supportsNoColumnsInsert() ) {
+				buf.append( ' ' ).append( dialect.getNoColumnsInsertString() );
+			}
+			else {
+				throw new MappingException(
+						String.format(
+								"The INSERT statement for table [%s] contains no column, and this is not supported by [%s]",
+								tableName,
+								dialect
+						)
+				);
+			}
 		}
 		else {
 			buf.append(" (");

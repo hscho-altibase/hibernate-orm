@@ -8,13 +8,13 @@ package org.hibernate.test.stateless;
 
 import java.util.Date;
 
-import org.junit.Test;
-
 import org.hibernate.ScrollMode;
 import org.hibernate.ScrollableResults;
 import org.hibernate.StatelessSession;
 import org.hibernate.Transaction;
+
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -38,27 +38,27 @@ public class StatelessSessionTest extends BaseCoreFunctionalTestCase {
 		Date initVersion = doc.getLastModified();
 		assertNotNull( initVersion );
 		tx.commit();
-		
+
 		tx = ss.beginTransaction();
 		doc.setText("blah blah blah .... blah");
 		ss.update(doc);
 		assertNotNull( doc.getLastModified() );
 		assertNotSame( doc.getLastModified(), initVersion );
 		tx.commit();
-		
+
 		tx = ss.beginTransaction();
 		doc.setText("blah blah blah .... blah blay");
 		ss.update(doc);
 		tx.commit();
-		
+
 		Document doc2 = (Document) ss.get(Document.class.getName(), "Blahs");
 		assertEquals("Blahs", doc2.getName());
 		assertEquals(doc.getText(), doc2.getText());
-				
+
 		doc2 = (Document) ss.createQuery("from Document where text is not null").uniqueResult();
 		assertEquals("Blahs", doc2.getName());
 		assertEquals(doc.getText(), doc2.getText());
-		
+
 		ScrollableResults sr = ss.createQuery("from Document where text is not null")
 			.scroll(ScrollMode.FORWARD_ONLY);
 		sr.next();
@@ -66,17 +66,17 @@ public class StatelessSessionTest extends BaseCoreFunctionalTestCase {
 		sr.close();
 		assertEquals("Blahs", doc2.getName());
 		assertEquals(doc.getText(), doc2.getText());
-				
+
 		doc2 = (Document) ss.createSQLQuery("select * from Document")
 			.addEntity(Document.class)
 			.uniqueResult();
 		assertEquals("Blahs", doc2.getName());
 		assertEquals(doc.getText(), doc2.getText());
-				
+
 		doc2 = (Document) ss.createCriteria(Document.class).uniqueResult();
 		assertEquals("Blahs", doc2.getName());
 		assertEquals(doc.getText(), doc2.getText());
-		
+
 		sr = ss.createCriteria(Document.class).scroll(ScrollMode.FORWARD_ONLY);
 		sr.next();
 		doc2 = (Document) sr.get(0);
@@ -165,6 +165,5 @@ public class StatelessSessionTest extends BaseCoreFunctionalTestCase {
 		tx.commit();
 		ss.close();
 	}
-
 }
 

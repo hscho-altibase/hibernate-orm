@@ -7,6 +7,7 @@
 package org.hibernate.event.internal;
 
 import org.hibernate.HibernateException;
+import org.hibernate.bytecode.enhance.spi.LazyPropertyInitializer;
 import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.engine.internal.Collections;
 import org.hibernate.event.spi.EventSource;
@@ -20,35 +21,42 @@ import org.hibernate.type.CollectionType;
  * @author Gavin King
  */
 public class FlushVisitor extends AbstractVisitor {
-	
 	private Object owner;
 
-	Object processCollection(Object collection, CollectionType type)
-	throws HibernateException {
+	FlushVisitor(EventSource session, Object owner) {
+		super(session);
+		this.owner = owner;
+	}
+
+	Object processCollection(Object collection, CollectionType type) throws HibernateException {
 		
-		if (collection==CollectionType.UNFETCHED_COLLECTION) {
+		if ( collection == CollectionType.UNFETCHED_COLLECTION ) {
 			return null;
 		}
 
-		if (collection!=null) {
+		if ( collection != null ) {
 			final PersistentCollection coll;
+			final EventSource session = getSession();
 			if ( type.hasHolder() ) {
-				coll = getSession().getPersistenceContext().getCollectionHolder(collection);
+				coll = session.getPersistenceContextInternal().getCollectionHolder(collection);
+			}
+			else if ( collection == LazyPropertyInitializer.UNFETCHED_PROPERTY ) {
+				coll = (PersistentCollection) type.resolve( collection, session, owner );
 			}
 			else {
 				coll = (PersistentCollection) collection;
 			}
 
-			Collections.processReachableCollection( coll, type, owner, getSession() );
+			Collections.processReachableCollection( coll, type, owner, session);
 		}
 
 		return null;
 
 	}
 
-	FlushVisitor(EventSource session, Object owner) {
-		super(session);
-		this.owner = owner;
+	@Override
+	boolean includeEntityProperty(Object[] values, int i) {
+		return true;
 	}
 
 }

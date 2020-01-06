@@ -38,8 +38,10 @@ import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.jdbc.WorkExecutor;
 import org.hibernate.jdbc.WorkExecutorVisitable;
+import org.hibernate.resource.jdbc.ResourceRegistry;
 import org.hibernate.resource.jdbc.internal.LogicalConnectionManagedImpl;
 import org.hibernate.resource.jdbc.internal.LogicalConnectionProvidedImpl;
+import org.hibernate.resource.jdbc.internal.ResourceRegistryStandardImpl;
 import org.hibernate.resource.jdbc.spi.JdbcSessionOwner;
 import org.hibernate.resource.jdbc.spi.LogicalConnectionImplementor;
 import org.hibernate.resource.transaction.backend.jdbc.spi.JdbcResourceTransaction;
@@ -59,25 +61,14 @@ public class JdbcCoordinatorImpl implements JdbcCoordinator {
 	private transient LogicalConnectionImplementor logicalConnection;
 	private transient JdbcSessionOwner owner;
 
+	private transient JdbcServices jdbcServices;
+
 	private transient Batch currentBatch;
 
 	private transient long transactionTimeOutInstant = -1;
 
-	/**
-	 * This is a marker value to insert instead of null values for when a Statement gets registered in xref
-	 * but has no associated ResultSets registered. This is useful to efficiently check against duplicate
-	 * registration but you'll have to check against instance equality rather than null beforeQuery attempting
-	 * to add elements to this set.
-	 */
-	private static final Set<ResultSet> EMPTY_RESULTSET = Collections.emptySet();
-
-	private final HashMap<Statement,Set<ResultSet>> xref = new HashMap<>();
-	private final Set<ResultSet> unassociatedResultSets = new HashSet<>();
-	private transient SqlExceptionHelper exceptionHelper;
-
 	private Statement lastQuery;
 	private final boolean isUserSuppliedConnection;
-
 
 	/**
 	 * If true, manually (and temporarily) circumvent aggressive release processing.
@@ -91,23 +82,26 @@ public class JdbcCoordinatorImpl implements JdbcCoordinator {
 	 */
 	public JdbcCoordinatorImpl(
 			Connection userSuppliedConnection,
-			JdbcSessionOwner owner) {
+			JdbcSessionOwner owner,
+			JdbcServices jdbcServices) {
 		this.isUserSuppliedConnection = userSuppliedConnection != null;
 
+		final ResourceRegistry resourceRegistry = new ResourceRegistryStandardImpl(
+				owner.getJdbcSessionContext().getObserver()
+		);
 		if ( isUserSuppliedConnection ) {
-			this.logicalConnection = new LogicalConnectionProvidedImpl( userSuppliedConnection );
+			this.logicalConnection = new LogicalConnectionProvidedImpl( userSuppliedConnection, resourceRegistry );
 		}
 		else {
 			this.logicalConnection = new LogicalConnectionManagedImpl(
 					owner.getJdbcConnectionAccess(),
-					owner.getJdbcSessionContext()
+					owner.getJdbcSessionContext(),
+					resourceRegistry,
+					jdbcServices
 			);
 		}
 		this.owner = owner;
-		this.exceptionHelper = owner.getJdbcSessionContext()
-				.getServiceRegistry()
-				.getService( JdbcServices.class )
-				.getSqlExceptionHelper();
+		this.jdbcServices = jdbcServices;
 	}
 
 	private JdbcCoordinatorImpl(
@@ -117,10 +111,9 @@ public class JdbcCoordinatorImpl implements JdbcCoordinator {
 		this.logicalConnection = logicalConnection;
 		this.isUserSuppliedConnection = isUserSuppliedConnection;
 		this.owner = owner;
-		this.exceptionHelper = owner.getJdbcSessionContext()
+		this.jdbcServices = owner.getJdbcSessionContext()
 				.getServiceRegistry()
-				.getService( JdbcServices.class )
-				.getSqlExceptionHelper();
+				.getService( JdbcServices.class );
 	}
 
 	@Override
@@ -142,7 +135,7 @@ public class JdbcCoordinatorImpl implements JdbcCoordinator {
 	 * @return The SqlExceptionHelper
 	 */
 	public SqlExceptionHelper sqlExceptionHelper() {
-		return exceptionHelper;
+		return jdbcServices.getSqlExceptionHelper();
 	}
 
 	private int flushDepth;
@@ -177,7 +170,6 @@ public class JdbcCoordinatorImpl implements JdbcCoordinator {
 				LOG.closingUnreleasedBatch();
 				currentBatch.release();
 			}
-			cleanup();
 		}
 		finally {
 			connection = logicalConnection.close();
@@ -221,7 +213,7 @@ public class JdbcCoordinatorImpl implements JdbcCoordinator {
 	@Override
 	public StatementPreparer getStatementPreparer() {
 		if ( statementPreparer == null ) {
-			statementPreparer = new StatementPreparerImpl( this );
+			statementPreparer = new StatementPreparerImpl( this, jdbcServices );
 		}
 		return statementPreparer;
 	}
@@ -231,7 +223,7 @@ public class JdbcCoordinatorImpl implements JdbcCoordinator {
 	@Override
 	public ResultSetReturn getResultSetReturn() {
 		if ( resultSetExtractor == null ) {
-			resultSetExtractor = new ResultSetReturnImpl( this );
+			resultSetExtractor = new ResultSetReturnImpl( this, jdbcServices );
 		}
 		return resultSetExtractor;
 	}
@@ -260,7 +252,7 @@ public class JdbcCoordinatorImpl implements JdbcCoordinator {
 
 	@Override
 	public void afterStatementExecution() {
-		LOG.tracev( "Starting afterQuery statement execution processing [{0}]", getConnectionReleaseMode() );
+		LOG.tracev( "Starting after statement execution processing [{0}]", getConnectionReleaseMode() );
 		if ( getConnectionReleaseMode() == ConnectionReleaseMode.AFTER_STATEMENT ) {
 			if ( ! releasesEnabled ) {
 				LOG.debug( "Skipping aggressive release due to manual disabling" );
@@ -342,12 +334,17 @@ public class JdbcCoordinatorImpl implements JdbcCoordinator {
 	@Override
 	public void cancelLastQuery() {
 		try {
-			if (lastQuery != null) {
+			if ( lastQuery != null ) {
 				lastQuery.cancel();
 			}
 		}
 		catch (SQLException sqle) {
-			throw exceptionHelper.convert( sqle, "Cannot cancel query" );
+			SqlExceptionHelper sqlExceptionHelper = jdbcServices.getSqlExceptionHelper();
+			//Should always be non-null, but to make sure as the implementation is lazy:
+			if ( sqlExceptionHelper != null ) {
+				sqlExceptionHelper = new SqlExceptionHelper( false );
+			}
+			throw sqlExceptionHelper.convert( sqle, "Cannot cancel query" );
 		}
 		finally {
 			lastQuery = null;
@@ -362,23 +359,6 @@ public class JdbcCoordinatorImpl implements JdbcCoordinator {
 	@Override
 	public void disableReleases() {
 		releasesEnabled = false;
-	}
-
-	private void cleanup() {
-		for ( Map.Entry<Statement,Set<ResultSet>> entry : xref.entrySet() ) {
-			closeAll( entry.getValue() );
-			close( entry.getKey() );
-		}
-		xref.clear();
-
-		closeAll( unassociatedResultSets );
-	}
-
-	protected void closeAll(Set<ResultSet> resultSets) {
-		for ( ResultSet resultSet : resultSets ) {
-			close( resultSet );
-		}
-		resultSets.clear();
 	}
 
 	@SuppressWarnings({ "unchecked" })

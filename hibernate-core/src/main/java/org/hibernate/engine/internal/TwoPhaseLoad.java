@@ -13,10 +13,13 @@ import org.hibernate.CacheMode;
 import org.hibernate.HibernateException;
 import org.hibernate.LockMode;
 import org.hibernate.bytecode.enhance.spi.LazyPropertyInitializer;
-import org.hibernate.cache.spi.access.EntityRegionAccessStrategy;
+import org.hibernate.cache.spi.access.EntityDataAccess;
 import org.hibernate.cache.spi.entry.CacheEntry;
+import org.hibernate.engine.profile.Fetch;
+import org.hibernate.engine.profile.FetchProfile;
 import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.engine.spi.EntityKey;
+import org.hibernate.engine.spi.LoadQueryInfluencers;
 import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.engine.spi.SessionEventListenerManager;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
@@ -34,6 +37,8 @@ import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.pretty.MessageHelper;
 import org.hibernate.property.access.internal.PropertyAccessStrategyBackRefImpl;
 import org.hibernate.proxy.HibernateProxy;
+import org.hibernate.stat.internal.StatsHelper;
+import org.hibernate.stat.spi.StatisticsImplementor;
 import org.hibernate.type.Type;
 import org.hibernate.type.TypeHelper;
 
@@ -55,7 +60,7 @@ public final class TwoPhaseLoad {
 	}
 
 	/**
-	 * Register the "hydrated" state of an entity instance, afterQuery the first step of 2-phase loading.
+	 * Register the "hydrated" state of an entity instance, after the first step of 2-phase loading.
 	 *
 	 * Add the "hydrated state" (an array) of an uninitialized entity to the session. We don't try
 	 * to resolve any associations yet, because there might be other entities waiting to be
@@ -78,7 +83,7 @@ public final class TwoPhaseLoad {
 			final LockMode lockMode,
 			final SharedSessionContractImplementor session) {
 		final Object version = Versioning.getVersion( values, persister );
-		session.getPersistenceContext().addEntry(
+		session.getPersistenceContextInternal().addEntry(
 				object,
 				Status.LOADING,
 				values,
@@ -100,6 +105,34 @@ public final class TwoPhaseLoad {
 	}
 
 	/**
+	 * @deprecated This method will be removed. Use {@link #initializeEntity(Object, boolean, SharedSessionContractImplementor, PreLoadEvent, Iterable)} instead.
+	 *
+	 * @param entity The entity being loaded
+	 * @param readOnly Is the entity being loaded as read-only
+	 * @param session The Session
+	 * @param preLoadEvent The (re-used) pre-load event
+	 */
+	@Deprecated
+	public static void initializeEntity(
+			final Object entity,
+			final boolean readOnly,
+			final SharedSessionContractImplementor session,
+			final PreLoadEvent preLoadEvent) {
+		final PersistenceContext persistenceContext = session.getPersistenceContext();
+		final EntityEntry entityEntry = persistenceContext.getEntry( entity );
+		if ( entityEntry == null ) {
+			throw new AssertionFailure( "possible non-threadsafe access to the session" );
+		}
+		final EventListenerGroup<PreLoadEventListener> listenerGroup = session
+			.getFactory()
+			.getServiceRegistry()
+			.getService( EventListenerRegistry.class )
+			.getEventListenerGroup( EventType.PRE_LOAD );
+		final Iterable<PreLoadEventListener> listeners = listenerGroup.listeners();
+		doInitializeEntity( entity, entityEntry, readOnly, session, preLoadEvent, listeners );
+	}
+
+	/**
 	 * Perform the second step of 2-phase load. Fully initialize the entity
 	 * instance.
 	 * <p/>
@@ -111,18 +144,20 @@ public final class TwoPhaseLoad {
 	 * @param readOnly Is the entity being loaded as read-only
 	 * @param session The Session
 	 * @param preLoadEvent The (re-used) pre-load event
+	 * @param preLoadEventListeners the pre-load event listeners
 	 */
 	public static void initializeEntity(
-			final Object entity,
-			final boolean readOnly,
-			final SharedSessionContractImplementor session,
-			final PreLoadEvent preLoadEvent) {
-		final PersistenceContext persistenceContext = session.getPersistenceContext();
+		final Object entity,
+		final boolean readOnly,
+		final SharedSessionContractImplementor session,
+		final PreLoadEvent preLoadEvent,
+		final Iterable<PreLoadEventListener> preLoadEventListeners) {
+		final PersistenceContext persistenceContext = session.getPersistenceContextInternal();
 		final EntityEntry entityEntry = persistenceContext.getEntry( entity );
 		if ( entityEntry == null ) {
 			throw new AssertionFailure( "possible non-threadsafe access to the session" );
 		}
-		doInitializeEntity( entity, entityEntry, readOnly, session, preLoadEvent );
+		doInitializeEntity( entity, entityEntry, readOnly, session, preLoadEvent, preLoadEventListeners );
 	}
 
 	private static void doInitializeEntity(
@@ -130,38 +165,77 @@ public final class TwoPhaseLoad {
 			final EntityEntry entityEntry,
 			final boolean readOnly,
 			final SharedSessionContractImplementor session,
-			final PreLoadEvent preLoadEvent) throws HibernateException {
-		final PersistenceContext persistenceContext = session.getPersistenceContext();
+			final PreLoadEvent preLoadEvent,
+			final Iterable<PreLoadEventListener> preLoadEventListeners) throws HibernateException {
+		final PersistenceContext persistenceContext = session.getPersistenceContextInternal();
 		final EntityPersister persister = entityEntry.getPersister();
 		final Serializable id = entityEntry.getId();
 		final Object[] hydratedState = entityEntry.getLoadedState();
 
 		final boolean debugEnabled = LOG.isDebugEnabled();
+
 		if ( debugEnabled ) {
 			LOG.debugf(
-					"Resolving associations for %s",
+					"Resolving attributes for %s",
 					MessageHelper.infoString( persister, id, session.getFactory() )
 			);
 		}
 
+		String entityName = persister.getEntityName();
+		String[] propertyNames = persister.getPropertyNames();
 		final Type[] types = persister.getPropertyTypes();
 		for ( int i = 0; i < hydratedState.length; i++ ) {
 			final Object value = hydratedState[i];
-			if ( value!=LazyPropertyInitializer.UNFETCHED_PROPERTY && value!= PropertyAccessStrategyBackRefImpl.UNKNOWN ) {
-				hydratedState[i] = types[i].resolve( value, session, entity );
+			if ( debugEnabled ) {
+				LOG.debugf(
+					"Processing attribute `%s` : value = %s",
+					propertyNames[i],
+					value == LazyPropertyInitializer.UNFETCHED_PROPERTY ? "<un-fetched>" : value == PropertyAccessStrategyBackRefImpl.UNKNOWN ? "<unknown>" : value
+				);
+			}
+
+			if ( value == LazyPropertyInitializer.UNFETCHED_PROPERTY ) {
+				if ( debugEnabled ) {
+					LOG.debugf( "Resolving <un-fetched> attribute : `%s`", propertyNames[i] );
+				}
+
+				// IMPLEMENTATION NOTE: This is a lazy property on a bytecode-enhanced entity.
+				// hydratedState[i] needs to remain LazyPropertyInitializer.UNFETCHED_PROPERTY so that
+				// setPropertyValues() below (ultimately AbstractEntityTuplizer#setPropertyValues) works properly
+				// No resolution is necessary, unless the lazy property is a collection.
+				if ( types[i].isCollectionType() ) {
+					// IMPLEMENTATION NOTE: this is a lazy collection property on a bytecode-enhanced entity.
+					// HHH-10989: We need to resolve the collection so that a CollectionReference is added to StatefulPersistentContext.
+					// As mentioned above, hydratedState[i] needs to remain LazyPropertyInitializer.UNFETCHED_PROPERTY
+					// so do not assign the resolved, unitialized PersistentCollection back to hydratedState[i].
+					Boolean overridingEager = getOverridingEager( session, entityName, propertyNames[i], types[i], debugEnabled );
+					types[i].resolve( value, session, entity, overridingEager );
+				}
+			}
+			else if ( value != PropertyAccessStrategyBackRefImpl.UNKNOWN ) {
+				if ( debugEnabled ) {
+					final boolean isLazyEnhanced = persister.getBytecodeEnhancementMetadata()
+						.getLazyAttributesMetadata()
+						.getLazyAttributeNames()
+						.contains( propertyNames[i] );
+					LOG.debugf( "Attribute (`%s`)  - enhanced for lazy-loading? - %s", propertyNames[i], isLazyEnhanced );
+				}
+
+				// we know value != LazyPropertyInitializer.UNFETCHED_PROPERTY
+				Boolean overridingEager = getOverridingEager( session, entityName, propertyNames[i], types[i], debugEnabled );
+				hydratedState[i] = types[i].resolve( value, session, entity, overridingEager );
+			}
+			else {
+				if ( debugEnabled ) {
+					LOG.debugf( "Skipping <unknown> attribute : `%s`", propertyNames[i] );
+				}
 			}
 		}
 
-		//Must occur afterQuery resolving identifiers!
+		//Must occur after resolving identifiers!
 		if ( session.isEventSource() ) {
 			preLoadEvent.setEntity( entity ).setState( hydratedState ).setId( id ).setPersister( persister );
-
-			final EventListenerGroup<PreLoadEventListener> listenerGroup = session
-					.getFactory()
-					.getServiceRegistry()
-					.getService( EventListenerRegistry.class )
-					.getEventListenerGroup( EventType.PRE_LOAD );
-			for ( PreLoadEventListener listener : listenerGroup.listeners() ) {
+			for ( PreLoadEventListener listener : preLoadEventListeners ) {
 				listener.onPreLoad( preLoadEvent );
 			}
 		}
@@ -169,7 +243,8 @@ public final class TwoPhaseLoad {
 		persister.setPropertyValues( entity, hydratedState );
 
 		final SessionFactoryImplementor factory = session.getFactory();
-		if ( persister.hasCache() && session.getCacheMode().isPutEnabled() ) {
+		final StatisticsImplementor statistics = factory.getStatistics();
+		if ( persister.canWriteToCache() && session.getCacheMode().isPutEnabled() ) {
 
 			if ( debugEnabled ) {
 				LOG.debugf(
@@ -180,7 +255,7 @@ public final class TwoPhaseLoad {
 
 			final Object version = Versioning.getVersion( hydratedState, persister );
 			final CacheEntry entry = persister.buildCacheEntry( entity, hydratedState, version, session );
-			final EntityRegionAccessStrategy cache = persister.getCacheAccessStrategy();
+			final EntityDataAccess cache = persister.getCacheAccessStrategy();
 			final Object cacheKey = cache.generateCacheKey( id, persister, factory, session.getTenantIdentifier() );
 
 			// explicit handling of caching for rows just inserted and then somehow forced to be read
@@ -189,7 +264,7 @@ public final class TwoPhaseLoad {
 			// 		2) Session#clear + some form of load
 			//
 			// we need to be careful not to clobber the lock here in the cache so that it can be rolled back if need be
-			if ( session.getPersistenceContext().wasInsertedDuringTransaction( persister, id ) ) {
+			if ( session.getPersistenceContextInternal().wasInsertedDuringTransaction( persister, id ) ) {
 				cache.update(
 						session,
 						cacheKey,
@@ -206,13 +281,15 @@ public final class TwoPhaseLoad {
 							session,
 							cacheKey,
 							persister.getCacheEntryStructure().structure( entry ),
-							session.getTimestamp(),
 							version,
 							useMinimalPuts( session, entityEntry )
 					);
 
-					if ( put && factory.getStatistics().isStatisticsEnabled() ) {
-						factory.getStatistics().secondLevelCachePut( cache.getRegion().getName() );
+					if ( put && statistics.isStatisticsEnabled() ) {
+						statistics.entityCachePut(
+								StatsHelper.INSTANCE.getRootEntityRole( persister ),
+								cache.getRegion().getName()
+						);
 					}
 				}
 				finally {
@@ -254,14 +331,12 @@ public final class TwoPhaseLoad {
 					hydratedState,
 					persister.getPropertyTypes(),
 					persister.getPropertyUpdateability(),
-					//afterQuery setting values to object
+					//after setting values to object
 					hydratedState,
 					session
 			);
 			persistenceContext.setEntryStatus( entityEntry, Status.MANAGED );
 		}
-
-		persister.afterInitialize( entity, session );
 
 		if ( debugEnabled ) {
 			LOG.debugf(
@@ -270,19 +345,91 @@ public final class TwoPhaseLoad {
 			);
 		}
 
-		if ( factory.getStatistics().isStatisticsEnabled() ) {
-			factory.getStatistics().loadEntity( persister.getEntityName() );
+		if ( statistics.isStatisticsEnabled() ) {
+			statistics.loadEntity( persister.getEntityName() );
 		}
 	}
-	
+
 	/**
-	 * PostLoad cannot occur during initializeEntity, as that call occurs *beforeQuery*
+	 * Perform the afterInitialize() step. This needs to be done after the collections have been properly initialized
+	 * thus a separate step.
+	 *
+	 * @param entity The entity being loaded
+	 * @param session The Session
+	 */
+	public static void afterInitialize(
+			final Object entity,
+			final SharedSessionContractImplementor session) {
+		final PersistenceContext persistenceContext = session.getPersistenceContext();
+		final EntityEntry entityEntry = persistenceContext.getEntry( entity );
+
+		entityEntry.getPersister().afterInitialize( entity, session );
+	}
+
+	/**
+	 * Check if eager of the association is overriden by anything.
+	 *
+	 * @param session session
+	 * @param entityName entity name
+	 * @param associationName association name
+	 *
+	 * @return null if there is no overriding, true if it is overridden to eager and false if it is overridden to lazy
+	 */
+	private static Boolean getOverridingEager(
+			final SharedSessionContractImplementor session,
+			final String entityName,
+			final String associationName,
+			final Type type,
+			final boolean isDebugEnabled) {
+		// Performance: check type.isCollectionType() first, as type.isAssociationType() is megamorphic
+		if ( type.isCollectionType() || type.isAssociationType()  ) {
+			final Boolean overridingEager = isEagerFetchProfile( session, entityName, associationName );
+
+			//This method is very hot, and private so let's piggy back on the fact that the caller already knows the debugging state.
+			if ( isDebugEnabled ) {
+				if ( overridingEager != null ) {
+					LOG.debugf(
+							"Overriding eager fetching using active fetch profile. EntityName: %s, associationName: %s, eager fetching: %s",
+							entityName,
+							associationName,
+							overridingEager
+					);
+				}
+			}
+
+			return overridingEager;
+		}
+		return null;
+	}
+
+	private static Boolean isEagerFetchProfile(SharedSessionContractImplementor session, String entityName, String associationName) {
+		LoadQueryInfluencers loadQueryInfluencers = session.getLoadQueryInfluencers();
+
+		// Performance: avoid concatenating entityName + "." + associationName when there is no need,
+		// as otherwise this section becomes an hot allocation point.
+		if ( loadQueryInfluencers.hasEnabledFetchProfiles() ) {
+			final String role =  entityName + '.' + associationName;
+			final SessionFactoryImplementor factory = session.getFactory();
+			for ( String fetchProfileName : loadQueryInfluencers.getEnabledFetchProfileNames() ) {
+				FetchProfile fp = factory.getFetchProfile( fetchProfileName );
+				Fetch fetch = fp.getFetchByRole( role );
+				if ( fetch != null && Fetch.Style.JOIN == fetch.getStyle() ) {
+					return true;
+				}
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * PostLoad cannot occur during initializeEntity, as that call occurs *before*
 	 * the Set collections are added to the persistence context by Loader.
 	 * Without the split, LazyInitializationExceptions can occur in the Entity's
 	 * postLoad if it acts upon the collection.
 	 *
 	 * HHH-6043
-	 * 
+	 *
 	 * @param entity The entity
 	 * @param session The Session
 	 * @param postLoadEvent The (re-used) post-load event
@@ -290,23 +437,39 @@ public final class TwoPhaseLoad {
 	public static void postLoad(
 			final Object entity,
 			final SharedSessionContractImplementor session,
-			final PostLoadEvent postLoadEvent) {
-		
+			final PostLoadEvent postLoadEvent,
+			final Iterable<PostLoadEventListener> postLoadEventListeners) {
+
 		if ( session.isEventSource() ) {
 			final PersistenceContext persistenceContext
-					= session.getPersistenceContext();
+					= session.getPersistenceContextInternal();
 			final EntityEntry entityEntry = persistenceContext.getEntry( entity );
 
 			postLoadEvent.setEntity( entity ).setId( entityEntry.getId() ).setPersister( entityEntry.getPersister() );
 
-			final EventListenerGroup<PostLoadEventListener> listenerGroup = session.getFactory()
-							.getServiceRegistry()
-							.getService( EventListenerRegistry.class )
-							.getEventListenerGroup( EventType.POST_LOAD );
-			for ( PostLoadEventListener listener : listenerGroup.listeners() ) {
+			for ( PostLoadEventListener listener : postLoadEventListeners ) {
 				listener.onPostLoad( postLoadEvent );
 			}
 		}
+	}
+
+	/**
+	 * This method will be removed.
+	 * @deprecated Use {@link #postLoad(Object, SharedSessionContractImplementor, PostLoadEvent, Iterable)}
+	 * instead.
+	 */
+	@Deprecated
+	public static void postLoad(
+		final Object entity,
+		final SharedSessionContractImplementor session,
+		final PostLoadEvent postLoadEvent) {
+
+		final EventListenerGroup<PostLoadEventListener> listenerGroup = session.getFactory()
+			.getServiceRegistry()
+			.getService( EventListenerRegistry.class )
+			.getEventListenerGroup( EventType.POST_LOAD );
+
+		postLoad( entity, session, postLoadEvent, listenerGroup.listeners() );
 	}
 
 	private static boolean useMinimalPuts(SharedSessionContractImplementor session, EntityEntry entityEntry) {
@@ -314,14 +477,15 @@ public final class TwoPhaseLoad {
 			return session.getCacheMode() != CacheMode.REFRESH;
 		}
 		else {
-			return entityEntry.getPersister().hasLazyProperties()
-					&& entityEntry.getPersister().isLazyPropertiesCacheable();
+			final EntityPersister persister = entityEntry.getPersister();
+			return persister.hasLazyProperties()
+					&& persister.isLazyPropertiesCacheable();
 		}
 	}
 
 	/**
 	 * Add an uninitialized instance of an entity class, as a placeholder to ensure object
-	 * identity. Must be called beforeQuery <tt>postHydrate()</tt>.
+	 * identity. Must be called before <tt>postHydrate()</tt>.
 	 *
 	 * Create a "temporary" entry for a newly instantiated entity. The entity is uninitialized,
 	 * but we need the mapping from id to instance in order to guarantee uniqueness.
@@ -338,7 +502,7 @@ public final class TwoPhaseLoad {
 			final EntityPersister persister,
 			final LockMode lockMode,
 			final SharedSessionContractImplementor session) {
-		session.getPersistenceContext().addEntity(
+		session.getPersistenceContextInternal().addEntity(
 				object,
 				Status.LOADING,
 				null,
@@ -368,7 +532,7 @@ public final class TwoPhaseLoad {
 			final LockMode lockMode,
 			final Object version,
 			final SharedSessionContractImplementor session) {
-		session.getPersistenceContext().addEntity(
+		session.getPersistenceContextInternal().addEntity(
 				object,
 				Status.LOADING,
 				null,

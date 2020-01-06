@@ -43,32 +43,36 @@ public class LogicalConnectionManagedImpl extends AbstractLogicalConnectionImple
 	private transient Connection physicalConnection;
 	private boolean closed;
 
-	public LogicalConnectionManagedImpl(
-			JdbcConnectionAccess jdbcConnectionAccess,
-			JdbcSessionContext jdbcSessionContext) {
-		this( jdbcConnectionAccess, jdbcSessionContext, new ResourceRegistryStandardImpl() );
-	}
+	private boolean providerDisablesAutoCommit;
 
 	public LogicalConnectionManagedImpl(
 			JdbcConnectionAccess jdbcConnectionAccess,
 			JdbcSessionContext jdbcSessionContext,
-			ResourceRegistry resourceRegistry) {
+			ResourceRegistry resourceRegistry,
+			JdbcServices jdbcServices) {
 		this.jdbcConnectionAccess = jdbcConnectionAccess;
 		this.observer = jdbcSessionContext.getObserver();
 		this.resourceRegistry = resourceRegistry;
 
 		this.connectionHandlingMode = determineConnectionHandlingMode(
 				jdbcSessionContext.getPhysicalConnectionHandlingMode(),
-				jdbcConnectionAccess
+				jdbcConnectionAccess );
 
-		);
-
-		this.sqlExceptionHelper = jdbcSessionContext.getServiceRegistry()
-				.getService( JdbcServices.class )
-				.getSqlExceptionHelper();
+		this.sqlExceptionHelper = jdbcServices.getSqlExceptionHelper();
 
 		if ( connectionHandlingMode.getAcquisitionMode() == ConnectionAcquisitionMode.IMMEDIATELY ) {
 			acquireConnectionIfNeeded();
+		}
+
+		this.providerDisablesAutoCommit = jdbcSessionContext.doesConnectionProviderDisableAutoCommit();
+		if ( providerDisablesAutoCommit ) {
+			log.debug(
+					"`hibernate.connection.provider_disables_autocommit` was enabled.  This setting should only be " +
+							"enabled when you are certain that the Connections given to Hibernate by the " +
+							"ConnectionProvider have auto-commit disabled.  Enabling this setting when the " +
+							"Connections do not have auto-commit disabled will lead to Hibernate executing " +
+							"SQL operations outside of any JDBC/SQL transaction."
+			);
 		}
 	}
 
@@ -87,14 +91,15 @@ public class LogicalConnectionManagedImpl extends AbstractLogicalConnectionImple
 			JdbcConnectionAccess jdbcConnectionAccess,
 			JdbcSessionContext jdbcSessionContext,
 			boolean closed) {
-		this( jdbcConnectionAccess, jdbcSessionContext, new ResourceRegistryStandardImpl() );
+		this( jdbcConnectionAccess, jdbcSessionContext, new ResourceRegistryStandardImpl(),
+				jdbcSessionContext.getServiceRegistry().getService( JdbcServices.class )
+		);
 		this.closed = closed;
 	}
 
 	private Connection acquireConnectionIfNeeded() {
 		if ( physicalConnection == null ) {
 			// todo : is this the right place for these observer calls?
-			observer.jdbcConnectionAcquisitionStart();
 			try {
 				physicalConnection = jdbcConnectionAccess.obtainConnection();
 			}
@@ -135,7 +140,7 @@ public class LogicalConnectionManagedImpl extends AbstractLogicalConnectionImple
 
 		if ( connectionHandlingMode.getReleaseMode() == ConnectionReleaseMode.AFTER_STATEMENT ) {
 			if ( getResourceRegistry().hasRegisteredResources() ) {
-				log.debug( "Skipping aggressive release of JDBC Connection afterQuery-statement due to held resources" );
+				log.debug( "Skipping aggressive release of JDBC Connection after-statement due to held resources" );
 			}
 			else {
 				log.debug( "Initiating JDBC connection release from afterStatement" );
@@ -180,8 +185,6 @@ public class LogicalConnectionManagedImpl extends AbstractLogicalConnectionImple
 			return;
 		}
 
-		// todo : is this the right place for these observer calls?
-		observer.jdbcConnectionReleaseStart();
 		try {
 			if ( !physicalConnection.isClosed() ) {
 				sqlExceptionHelper.logAndClearWarnings( physicalConnection );
@@ -214,7 +217,7 @@ public class LogicalConnectionManagedImpl extends AbstractLogicalConnectionImple
 	public static LogicalConnectionManagedImpl deserialize(
 			ObjectInputStream ois,
 			JdbcConnectionAccess jdbcConnectionAccess,
-			JdbcSessionContext jdbcSessionContext) throws IOException, ClassNotFoundException {
+			JdbcSessionContext jdbcSessionContext) throws IOException {
 		final boolean isClosed = ois.readBoolean();
 		return new LogicalConnectionManagedImpl( jdbcConnectionAccess, jdbcSessionContext, isClosed );
 	}
@@ -251,15 +254,21 @@ public class LogicalConnectionManagedImpl extends AbstractLogicalConnectionImple
 
 	@Override
 	public void begin() {
-		initiallyAutoCommit = determineInitialAutoCommitMode( getConnectionForTransactionManagement() );
+		initiallyAutoCommit = !doConnectionsFromProviderHaveAutoCommitDisabled() && determineInitialAutoCommitMode(
+				getConnectionForTransactionManagement() );
 		super.begin();
 	}
 
 	@Override
 	protected void afterCompletion() {
-		afterTransaction();
-
 		resetConnection( initiallyAutoCommit );
 		initiallyAutoCommit = false;
+
+		afterTransaction();
+	}
+
+	@Override
+	protected boolean doConnectionsFromProviderHaveAutoCommitDisabled() {
+		return providerDisablesAutoCommit;
 	}
 }

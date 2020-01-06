@@ -198,7 +198,7 @@ public class SchemaExport {
 	/**
 	 * Should we stop once an error occurs?
 	 *
-	 * @param haltOnError True if export should stop afterQuery error.
+	 * @param haltOnError True if export should stop after error.
 	 *
 	 * @return this
 	 */
@@ -255,9 +255,7 @@ public class SchemaExport {
 			Metadata metadata,
 			ServiceRegistry serviceRegistry,
 			TargetDescriptor targetDescriptor) {
-		Map config = new HashMap();
-		config.putAll( serviceRegistry.getService( ConfigurationService.class ).getSettings() );
-
+		Map config = new HashMap( serviceRegistry.getService( ConfigurationService.class ).getSettings() );
 		config.put( AvailableSettings.HBM2DDL_DELIMITER, delimiter );
 		config.put( AvailableSettings.FORMAT_SQL, format );
 		config.put( AvailableSettings.HBM2DDL_IMPORT_FILES, importFiles );
@@ -325,7 +323,8 @@ public class SchemaExport {
 			}
 			scriptTarget = Helper.interpretScriptTargetSetting(
 					outputFile,
-					serviceRegistry.getService( ClassLoaderService.class )
+					serviceRegistry.getService( ClassLoaderService.class ),
+					(String) serviceRegistry.getService( ConfigurationService.class ).getSettings().get( AvailableSettings.HBM2DDL_CHARSET_NAME )
 			);
 		}
 		else {
@@ -355,7 +354,6 @@ public class SchemaExport {
 		}
 		catch (Exception e) {
 			LOG.unableToCreateSchema( e );
-			e.printStackTrace();
 		}
 	}
 
@@ -454,9 +452,9 @@ public class SchemaExport {
 	}
 
 	/**
-	 * Returns a List of all Exceptions which occured during the export.
+	 * Returns a List of all Exceptions which occurred during the export.
 	 *
-	 * @return A List containing the Exceptions occured during the export
+	 * @return A List containing the Exceptions occurred during the export
 	 */
 	public List getExceptions() {
 		return exceptions;

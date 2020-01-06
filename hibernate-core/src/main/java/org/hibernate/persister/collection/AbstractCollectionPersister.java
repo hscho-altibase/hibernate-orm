@@ -18,13 +18,14 @@ import java.util.Set;
 
 import org.hibernate.AssertionFailure;
 import org.hibernate.FetchMode;
+import org.hibernate.Filter;
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
 import org.hibernate.QueryException;
 import org.hibernate.TransientObjectException;
 import org.hibernate.boot.model.relational.Database;
 import org.hibernate.cache.CacheException;
-import org.hibernate.cache.spi.access.CollectionRegionAccessStrategy;
+import org.hibernate.cache.spi.access.CollectionDataAccess;
 import org.hibernate.cache.spi.entry.CacheEntryStructure;
 import org.hibernate.cache.spi.entry.StructuredCollectionCacheEntry;
 import org.hibernate.cache.spi.entry.StructuredMapCacheEntry;
@@ -33,6 +34,7 @@ import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.engine.jdbc.batch.internal.BasicBatchKey;
 import org.hibernate.engine.jdbc.env.spi.JdbcEnvironment;
+import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
 import org.hibernate.engine.jdbc.spi.SqlExceptionHelper;
 import org.hibernate.engine.spi.EntityKey;
 import org.hibernate.engine.spi.ExecuteUpdateResultCheckStyle;
@@ -60,6 +62,7 @@ import org.hibernate.mapping.List;
 import org.hibernate.mapping.Selectable;
 import org.hibernate.mapping.Table;
 import org.hibernate.metadata.CollectionMetadata;
+import org.hibernate.metamodel.model.domain.NavigableRole;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.persister.entity.Loadable;
 import org.hibernate.persister.entity.PropertyMapping;
@@ -111,7 +114,7 @@ public abstract class AbstractCollectionPersister
 
 	// TODO: encapsulate the protected instance variables!
 
-	private final String role;
+	private final NavigableRole navigableRole;
 
 	// SQL statements
 	private final String sqlDeleteString;
@@ -151,6 +154,7 @@ public abstract class AbstractCollectionPersister
 	protected final String[] indexColumnNames;
 	protected final String[] indexFormulaTemplates;
 	protected final String[] indexFormulas;
+	protected final boolean[] indexColumnIsGettable;
 	protected final boolean[] indexColumnIsSettable;
 	protected final String[] elementColumnNames;
 	protected final String[] elementColumnWriters;
@@ -158,6 +162,7 @@ public abstract class AbstractCollectionPersister
 	protected final String[] elementColumnReaderTemplates;
 	protected final String[] elementFormulaTemplates;
 	protected final String[] elementFormulas;
+	protected final boolean[] elementColumnIsGettable;
 	protected final boolean[] elementColumnIsSettable;
 	protected final boolean[] elementColumnIsInPrimaryKey;
 	protected final String[] indexColumnAliases;
@@ -197,7 +202,7 @@ public abstract class AbstractCollectionPersister
 	private final IdentifierGenerator identifierGenerator;
 	private final PropertyMapping elementPropertyMapping;
 	private final EntityPersister elementPersister;
-	private final CollectionRegionAccessStrategy cacheAccessStrategy;
+	private final CollectionDataAccess cacheAccessStrategy;
 	private final CollectionType collectionType;
 	private CollectionInitializer initializer;
 
@@ -225,11 +230,10 @@ public abstract class AbstractCollectionPersister
 	private final Serializable[] spaces;
 
 	private Map collectionPropertyColumnAliases = new HashMap();
-	private Map collectionPropertyColumnNames = new HashMap();
 
 	public AbstractCollectionPersister(
 			Collection collectionBinding,
-			CollectionRegionAccessStrategy cacheAccessStrategy,
+			CollectionDataAccess cacheAccessStrategy,
 			PersisterCreationContext creationContext) throws MappingException, CacheException {
 
 		final Database database = creationContext.getMetadata().getDatabase();
@@ -249,7 +253,7 @@ public abstract class AbstractCollectionPersister
 		dialect = factory.getDialect();
 		sqlExceptionHelper = factory.getSQLExceptionHelper();
 		collectionType = collectionBinding.getCollectionType();
-		role = collectionBinding.getRole();
+		navigableRole = new NavigableRole( collectionBinding.getRole() );
 		entityName = collectionBinding.getOwnerEntityName();
 		ownerPersister = factory.getEntityPersister( entityName );
 		queryLoaderName = collectionBinding.getLoaderName();
@@ -330,9 +334,15 @@ public abstract class AbstractCollectionPersister
 		elementFormulaTemplates = new String[elementSpan];
 		elementFormulas = new String[elementSpan];
 		elementColumnIsSettable = new boolean[elementSpan];
+		elementColumnIsGettable = new boolean[elementSpan];
 		elementColumnIsInPrimaryKey = new boolean[elementSpan];
 		boolean isPureFormula = true;
 		boolean hasNotNullableColumns = false;
+		boolean oneToMany = collectionBinding.isOneToMany();
+		boolean[] columnInsertability = null;
+		if ( !oneToMany ) {
+			columnInsertability = collectionBinding.getElement().getColumnInsertability();
+		}
 		int j = 0;
 		iter = collectionBinding.getElement().getColumnIterator();
 		while ( iter.hasNext() ) {
@@ -349,7 +359,15 @@ public abstract class AbstractCollectionPersister
 				elementColumnWriters[j] = col.getWriteExpr();
 				elementColumnReaders[j] = col.getReadExpr( dialect );
 				elementColumnReaderTemplates[j] = col.getTemplate( dialect, factory.getSqlFunctionRegistry() );
-				elementColumnIsSettable[j] = true;
+				elementColumnIsGettable[j] = true;
+				if ( elementType.isComponentType() ) {
+					// Implements desired behavior specifically for @ElementCollection mappings.
+					elementColumnIsSettable[j] = columnInsertability[j];
+				}
+				else {
+					// Preserves legacy non-@ElementCollection behavior
+					elementColumnIsSettable[j] = true;
+				}
 				elementColumnIsInPrimaryKey[j] = !col.isNullable();
 				if ( !col.isNullable() ) {
 					hasNotNullableColumns = true;
@@ -375,10 +393,13 @@ public abstract class AbstractCollectionPersister
 			IndexedCollection indexedCollection = (IndexedCollection) collectionBinding;
 			indexType = indexedCollection.getIndex().getType();
 			int indexSpan = indexedCollection.getIndex().getColumnSpan();
+			boolean[] indexColumnInsertability = indexedCollection.getIndex().getColumnInsertability();
+			boolean[] indexColumnUpdatability = indexedCollection.getIndex().getColumnUpdateability();
 			iter = indexedCollection.getIndex().getColumnIterator();
 			indexColumnNames = new String[indexSpan];
 			indexFormulaTemplates = new String[indexSpan];
 			indexFormulas = new String[indexSpan];
+			indexColumnIsGettable = new boolean[indexSpan];
 			indexColumnIsSettable = new boolean[indexSpan];
 			indexColumnAliases = new String[indexSpan];
 			int i = 0;
@@ -395,7 +416,8 @@ public abstract class AbstractCollectionPersister
 				else {
 					Column indexCol = (Column) s;
 					indexColumnNames[i] = indexCol.getQuotedName( dialect );
-					indexColumnIsSettable[i] = true;
+					indexColumnIsGettable[i] = true;
+					indexColumnIsSettable[i] = indexColumnInsertability[i] || indexColumnUpdatability[i];
 				}
 				i++;
 			}
@@ -405,6 +427,7 @@ public abstract class AbstractCollectionPersister
 		}
 		else {
 			indexContainsFormula = false;
+			indexColumnIsGettable = null;
 			indexColumnIsSettable = null;
 			indexFormulaTemplates = null;
 			indexFormulas = null;
@@ -545,6 +568,7 @@ public abstract class AbstractCollectionPersister
 
 		hasOrder = collectionBinding.getOrderBy() != null;
 		if ( hasOrder ) {
+			LOG.debugf( "Translating order-by fragment [%s] for collection role : %s",  collectionBinding.getOrderBy(), getRole() );
 			orderByTranslation = Template.translateOrderBy(
 					collectionBinding.getOrderBy(),
 					new ColumnMapperImpl(),
@@ -571,6 +595,7 @@ public abstract class AbstractCollectionPersister
 
 		hasManyToManyOrder = collectionBinding.getManyToManyOrdering() != null;
 		if ( hasManyToManyOrder ) {
+			LOG.debugf( "Translating many-to-many order-by fragment [%s] for collection role : %s",  collectionBinding.getOrderBy(), getRole() );
 			manyToManyOrderByTranslation = Template.translateOrderBy(
 					collectionBinding.getManyToManyOrdering(),
 					new ColumnMapperImpl(),
@@ -692,7 +717,7 @@ public abstract class AbstractCollectionPersister
 		if ( subselectInitializer != null ) {
 			return subselectInitializer;
 		}
-		else if ( session.getLoadQueryInfluencers().getEnabledFilters().isEmpty() ) {
+		else if ( ! session.getLoadQueryInfluencers().hasEnabledFilters() ) {
 			return initializer;
 		}
 		else {
@@ -706,7 +731,7 @@ public abstract class AbstractCollectionPersister
 			return null;
 		}
 
-		final PersistenceContext persistenceContext = session.getPersistenceContext();
+		final PersistenceContext persistenceContext = session.getPersistenceContextInternal();
 
 		SubselectFetch subselect = persistenceContext.getBatchFetchQueue()
 				.getSubselect( session.generateEntityKey( key, getOwnerEntityPersister() ) );
@@ -736,7 +761,12 @@ public abstract class AbstractCollectionPersister
 			throws MappingException;
 
 	@Override
-	public CollectionRegionAccessStrategy getCacheAccessStrategy() {
+	public NavigableRole getNavigableRole() {
+		return navigableRole;
+	}
+
+	@Override
+	public CollectionDataAccess getCacheAccessStrategy() {
 		return cacheAccessStrategy;
 	}
 
@@ -838,7 +868,7 @@ public abstract class AbstractCollectionPersister
 			throws HibernateException, SQLException {
 		Object index = getIndexType().nullSafeGet( rs, aliases, session, null );
 		if ( index == null ) {
-			throw new HibernateException( "null index column for collection: " + role );
+			throw new HibernateException( "null index column for collection: " + navigableRole.getFullPath() );
 		}
 		index = decrementIndexByBase( index );
 		return index;
@@ -856,7 +886,7 @@ public abstract class AbstractCollectionPersister
 			throws HibernateException, SQLException {
 		Object id = getIdentifierType().nullSafeGet( rs, alias, session, null );
 		if ( id == null ) {
-			throw new HibernateException( "null identifier column for collection: " + role );
+			throw new HibernateException( "null identifier column for collection: " + navigableRole.getFullPath() );
 		}
 		return id;
 	}
@@ -864,7 +894,16 @@ public abstract class AbstractCollectionPersister
 	@Override
 	public Object readKey(ResultSet rs, String[] aliases, SharedSessionContractImplementor session)
 			throws HibernateException, SQLException {
-		return getKeyType().nullSafeGet( rs, aliases, session, null );
+		// First hydrate the collection key to check if it is null.
+		// Don't bother resolving the collection key if the hydrated value is null.
+
+		// Implementation note: if collection key is a composite value, then resolving a null value will
+		// result in instantiating an empty composite if AvailableSettings#CREATE_EMPTY_COMPOSITES_ENABLED
+		// is true. By not resolving a null value for a composite key, we avoid the overhead of instantiating
+		// an empty composite, checking if it is equivalent to null (it should be), then ultimately throwing
+		// out the empty value.
+		final Object hydratedKey = getKeyType().hydrate( rs, aliases, session, null );
+		return hydratedKey == null ? null : getKeyType().resolve( hydratedKey, session, null );
 	}
 
 	/**
@@ -874,7 +913,7 @@ public abstract class AbstractCollectionPersister
 			throws HibernateException, SQLException {
 
 		if ( key == null ) {
-			throw new NullPointerException( "null key for collection: " + role ); // an assertion
+			throw new NullPointerException( "null key for collection: " + navigableRole.getFullPath() ); // an assertion
 		}
 		getKeyType().nullSafeSet( st, key, i, session );
 		return i + keyColumnAliases.length;
@@ -1064,8 +1103,8 @@ public abstract class AbstractCollectionPersister
 	}
 
 	protected void appendElementColumns(SelectFragment frag, String elemAlias) {
-		for ( int i = 0; i < elementColumnIsSettable.length; i++ ) {
-			if ( elementColumnIsSettable[i] ) {
+		for ( int i = 0; i < elementColumnIsGettable.length; i++ ) {
+			if ( elementColumnIsGettable[i] ) {
 				frag.addColumnTemplate( elemAlias, elementColumnReaderTemplates[i], elementColumnAliases[i] );
 			}
 			else {
@@ -1076,8 +1115,8 @@ public abstract class AbstractCollectionPersister
 
 	protected void appendIndexColumns(SelectFragment frag, String alias) {
 		if ( hasIndex ) {
-			for ( int i = 0; i < indexColumnIsSettable.length; i++ ) {
-				if ( indexColumnIsSettable[i] ) {
+			for ( int i = 0; i < indexColumnIsGettable.length; i++ ) {
+				if ( indexColumnIsGettable[i] ) {
 					frag.addColumn( alias, indexColumnNames[i], indexColumnAliases[i] );
 				}
 				else {
@@ -1172,7 +1211,7 @@ public abstract class AbstractCollectionPersister
 
 			try {
 				int offset = 1;
-				PreparedStatement st = null;
+				final PreparedStatement st;
 				Expectation expectation = Expectations.appropriateExpectation( getDeleteAllCheckStyle() );
 				boolean callable = isDeleteAllCallable();
 				boolean useBatch = expectation.canBeBatched();
@@ -1263,6 +1302,7 @@ public abstract class AbstractCollectionPersister
 		try {
 			// create all the new entries
 			Iterator entries = collection.entries( this );
+			final JdbcCoordinator jdbcCoordinator = session.getJdbcCoordinator();
 			if ( entries.hasNext() ) {
 				Expectation expectation = Expectations.appropriateExpectation( getInsertCheckStyle() );
 				collection.preInsert( this );
@@ -1273,7 +1313,7 @@ public abstract class AbstractCollectionPersister
 					final Object entry = entries.next();
 					if ( collection.entryExists( entry, i ) ) {
 						int offset = 1;
-						PreparedStatement st = null;
+						final PreparedStatement st;
 						boolean callable = isInsertCallable();
 						boolean useBatch = expectation.canBeBatched();
 						String sql = getSQLInsertRowString();
@@ -1285,14 +1325,12 @@ public abstract class AbstractCollectionPersister
 										expectation
 								);
 							}
-							st = session
-									.getJdbcCoordinator()
+							st = jdbcCoordinator
 									.getBatch( recreateBatchKey )
 									.getBatchStatement( sql, callable );
 						}
 						else {
-							st = session
-									.getJdbcCoordinator()
+							st = jdbcCoordinator
 									.getStatementPreparer()
 									.prepareStatement( sql, callable );
 						}
@@ -1311,13 +1349,13 @@ public abstract class AbstractCollectionPersister
 							loc = writeElement( st, collection.getElement( entry ), loc, session );
 
 							if ( useBatch ) {
-								session
-										.getJdbcCoordinator()
+								jdbcCoordinator
 										.getBatch( recreateBatchKey )
 										.addToBatch();
 							}
 							else {
-								expectation.verifyOutcome( session.getJdbcCoordinator().getResultSetReturn().executeUpdate( st ), st, -1 );
+								expectation.verifyOutcome( jdbcCoordinator
+																.getResultSetReturn().executeUpdate( st ), st, -1 );
 							}
 
 							collection.afterRowInsert( this, entry, i );
@@ -1325,14 +1363,14 @@ public abstract class AbstractCollectionPersister
 						}
 						catch ( SQLException sqle ) {
 							if ( useBatch ) {
-								session.getJdbcCoordinator().abortBatch();
+								jdbcCoordinator.abortBatch();
 							}
 							throw sqle;
 						}
 						finally {
 							if ( !useBatch ) {
-								session.getJdbcCoordinator().getResourceRegistry().release( st );
-								session.getJdbcCoordinator().afterStatementExecution();
+								jdbcCoordinator.getResourceRegistry().release( st );
+								jdbcCoordinator.afterStatementExecution();
 							}
 						}
 
@@ -1391,7 +1429,7 @@ public abstract class AbstractCollectionPersister
 				int offset = 1;
 				int count = 0;
 				while ( deletes.hasNext() ) {
-					PreparedStatement st = null;
+					final PreparedStatement st;
 					boolean callable = isDeleteCallable();
 					boolean useBatch = expectation.canBeBatched();
 					String sql = getSQLDeleteRowString();
@@ -1586,7 +1624,7 @@ public abstract class AbstractCollectionPersister
 
 	@Override
 	public String getRole() {
-		return role;
+		return navigableRole.getFullPath();
 	}
 
 	public String getOwnerEntityName() {
@@ -1707,7 +1745,7 @@ public abstract class AbstractCollectionPersister
 
 		if ( !isInverse && collection.isRowUpdatePossible() ) {
 
-			LOG.debugf( "Updating rows of collection: %s#%s", role, id );
+			LOG.debugf( "Updating rows of collection: %s#%s", navigableRole.getFullPath(), id );
 
 			// update all the modified entries
 			int count = doUpdateRows( id, collection, session );
@@ -1829,7 +1867,7 @@ public abstract class AbstractCollectionPersister
 
 	@Override
 	public String toString() {
-		return StringHelper.unqualify( getClass().getName() ) + '(' + role + ')';
+		return StringHelper.unqualify( getClass().getName() ) + '(' + navigableRole.getFullPath() + ')';
 	}
 
 	@Override
@@ -1854,8 +1892,9 @@ public abstract class AbstractCollectionPersister
 
 	@Override
 	public boolean isAffectedByEnabledFilters(SharedSessionContractImplementor session) {
-		return filterHelper.isAffectedBy( session.getLoadQueryInfluencers().getEnabledFilters() ) ||
-				( isManyToMany() && manyToManyFilterHelper.isAffectedBy( session.getLoadQueryInfluencers().getEnabledFilters() ) );
+		final Map<String, Filter> enabledFilters = session.getLoadQueryInfluencers().getEnabledFilters();
+		return filterHelper.isAffectedBy( enabledFilters ) ||
+				( isManyToMany() && manyToManyFilterHelper.isAffectedBy( enabledFilters ) );
 	}
 
 	public boolean isSubselectLoadable() {
@@ -1876,8 +1915,9 @@ public abstract class AbstractCollectionPersister
 		}
 
 		String[] result = new String[rawAliases.length];
+		final Alias alias = new Alias( suffix );
 		for ( int i = 0; i < rawAliases.length; i++ ) {
-			result[i] = new Alias( suffix ).toUnquotedAliasString( rawAliases[i] );
+			result[i] = alias.toUnquotedAliasString( rawAliases[i] );
 		}
 		return result;
 	}
@@ -1902,7 +1942,6 @@ public abstract class AbstractCollectionPersister
 	private void initCollectionPropertyMap(String aliasName, Type type, String[] columnAliases, String[] columnNames) {
 
 		collectionPropertyColumnAliases.put( aliasName, columnAliases );
-		collectionPropertyColumnNames.put( aliasName, columnNames );
 
 		if ( type.isComponentType() ) {
 			CompositeType ct = (CompositeType) type;
@@ -1910,7 +1949,6 @@ public abstract class AbstractCollectionPersister
 			for ( int i = 0; i < propertyNames.length; i++ ) {
 				String name = propertyNames[i];
 				collectionPropertyColumnAliases.put( aliasName + "." + name, columnAliases[i] );
-				collectionPropertyColumnNames.put( aliasName + "." + name, columnNames[i] );
 			}
 		}
 
@@ -1919,23 +1957,23 @@ public abstract class AbstractCollectionPersister
 	@Override
 	public int getSize(Serializable key, SharedSessionContractImplementor session) {
 		try {
-			PreparedStatement st = session
-					.getJdbcCoordinator()
+			final JdbcCoordinator jdbcCoordinator = session.getJdbcCoordinator();
+			PreparedStatement st = jdbcCoordinator
 					.getStatementPreparer()
 					.prepareStatement( sqlSelectSizeString );
 			try {
 				getKeyType().nullSafeSet( st, key, 1, session );
-				ResultSet rs = session.getJdbcCoordinator().getResultSetReturn().extract( st );
+				ResultSet rs = jdbcCoordinator.getResultSetReturn().extract( st );
 				try {
 					return rs.next() ? rs.getInt( 1 ) - baseIndex : 0;
 				}
 				finally {
-					session.getJdbcCoordinator().getResourceRegistry().release( rs, st );
+					jdbcCoordinator.getResourceRegistry().release( rs, st );
 				}
 			}
 			finally {
-				session.getJdbcCoordinator().getResourceRegistry().release( st );
-				session.getJdbcCoordinator().afterStatementExecution();
+				jdbcCoordinator.getResourceRegistry().release( st );
+				jdbcCoordinator.afterStatementExecution();
 			}
 		}
 		catch ( SQLException sqle ) {
@@ -1960,27 +1998,27 @@ public abstract class AbstractCollectionPersister
 
 	private boolean exists(Serializable key, Object indexOrElement, Type indexOrElementType, String sql, SharedSessionContractImplementor session) {
 		try {
-			PreparedStatement st = session
-					.getJdbcCoordinator()
+			final JdbcCoordinator jdbcCoordinator = session.getJdbcCoordinator();
+			PreparedStatement st = jdbcCoordinator
 					.getStatementPreparer()
 					.prepareStatement( sql );
 			try {
 				getKeyType().nullSafeSet( st, key, 1, session );
 				indexOrElementType.nullSafeSet( st, indexOrElement, keyColumnNames.length + 1, session );
-				ResultSet rs = session.getJdbcCoordinator().getResultSetReturn().extract( st );
+				ResultSet rs = jdbcCoordinator.getResultSetReturn().extract( st );
 				try {
 					return rs.next();
 				}
 				finally {
-					session.getJdbcCoordinator().getResourceRegistry().release( rs, st );
+					jdbcCoordinator.getResourceRegistry().release( rs, st );
 				}
 			}
 			catch ( TransientObjectException e ) {
 				return false;
 			}
 			finally {
-				session.getJdbcCoordinator().getResourceRegistry().release( st );
-				session.getJdbcCoordinator().afterStatementExecution();
+				jdbcCoordinator.getResourceRegistry().release( st );
+				jdbcCoordinator.afterStatementExecution();
 			}
 		}
 		catch ( SQLException sqle ) {
@@ -1996,14 +2034,14 @@ public abstract class AbstractCollectionPersister
 	@Override
 	public Object getElementByIndex(Serializable key, Object index, SharedSessionContractImplementor session, Object owner) {
 		try {
-			PreparedStatement st = session
-					.getJdbcCoordinator()
+			final JdbcCoordinator jdbcCoordinator = session.getJdbcCoordinator();
+			PreparedStatement st = jdbcCoordinator
 					.getStatementPreparer()
 					.prepareStatement( sqlSelectRowByIndexString );
 			try {
 				getKeyType().nullSafeSet( st, key, 1, session );
 				getIndexType().nullSafeSet( st, incrementIndexByBase( index ), keyColumnNames.length + 1, session );
-				ResultSet rs = session.getJdbcCoordinator().getResultSetReturn().extract( st );
+				ResultSet rs = jdbcCoordinator.getResultSetReturn().extract( st );
 				try {
 					if ( rs.next() ) {
 						return getElementType().nullSafeGet( rs, elementColumnAliases, session, owner );
@@ -2013,12 +2051,12 @@ public abstract class AbstractCollectionPersister
 					}
 				}
 				finally {
-					session.getJdbcCoordinator().getResourceRegistry().release( rs, st );
+					jdbcCoordinator.getResourceRegistry().release( rs, st );
 				}
 			}
 			finally {
-				session.getJdbcCoordinator().getResourceRegistry().release( st );
-				session.getJdbcCoordinator().afterStatementExecution();
+				jdbcCoordinator.getResourceRegistry().release( st );
+				jdbcCoordinator.afterStatementExecution();
 			}
 		}
 		catch ( SQLException sqle ) {

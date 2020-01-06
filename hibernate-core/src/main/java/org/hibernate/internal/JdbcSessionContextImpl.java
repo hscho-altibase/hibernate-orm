@@ -28,12 +28,15 @@ public class JdbcSessionContextImpl implements JdbcSessionContext {
 	private final transient ServiceRegistry serviceRegistry;
 	private final transient JdbcObserver jdbcObserver;
 
-	public JdbcSessionContextImpl(SharedSessionContractImplementor session, StatementInspector statementInspector) {
+	public JdbcSessionContextImpl(
+			SharedSessionContractImplementor session,
+			StatementInspector statementInspector,
+			FastSessionServices fastSessionServices) {
 		this.sessionFactory = session.getFactory();
 		this.statementInspector = statementInspector;
 		this.connectionHandlingMode = settings().getPhysicalConnectionHandlingMode();
 		this.serviceRegistry = sessionFactory.getServiceRegistry();
-		this.jdbcObserver = new JdbcObserverImpl( session );
+		this.jdbcObserver = new JdbcObserverImpl( session, fastSessionServices );
 
 		if ( this.statementInspector == null ) {
 			throw new IllegalArgumentException( "StatementInspector cannot be null" );
@@ -58,6 +61,11 @@ public class JdbcSessionContextImpl implements JdbcSessionContext {
 	@Override
 	public PhysicalConnectionHandlingMode getPhysicalConnectionHandlingMode() {
 		return connectionHandlingMode;
+	}
+
+	@Override
+	public boolean doesConnectionProviderDisableAutoCommit() {
+		return settings().doesConnectionProviderDisableAutoCommit();
 	}
 
 	@Override

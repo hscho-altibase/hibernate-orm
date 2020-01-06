@@ -11,7 +11,9 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
+import antlr.collections.AST;
 import org.hibernate.QueryException;
 import org.hibernate.engine.internal.JoinSequence;
 import org.hibernate.hql.internal.CollectionProperties;
@@ -23,6 +25,7 @@ import org.hibernate.hql.spi.QueryTranslator;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.StringHelper;
+import org.hibernate.param.DynamicFilterParameterSpecification;
 import org.hibernate.param.ParameterSpecification;
 import org.hibernate.persister.collection.QueryableCollection;
 import org.hibernate.persister.entity.DiscriminatorMetadata;
@@ -67,8 +70,8 @@ public class FromElement extends HqlSqlWalkerNode implements DisplayableNode, Pa
 	private boolean useWhereFragment = true;
 	private List<FromElement> destinations;
 	private boolean manyToMany;
+	private AST withClauseAst;
 	private String withClauseFragment;
-	private String withClauseJoinAlias;
 	private boolean dereferencedBySuperclassProperty;
 	private boolean dereferencedBySubclassProperty;
 
@@ -172,7 +175,7 @@ public class FromElement extends HqlSqlWalkerNode implements DisplayableNode, Pa
 		//return classAlias == null ? className : classAlias;
 	}
 
-	private String getTableName() {
+	public String getTableName() {
 		Queryable queryable = getQueryable();
 		return ( queryable != null ) ? queryable.getTableName() : "{none}";
 	}
@@ -279,7 +282,7 @@ public class FromElement extends HqlSqlWalkerNode implements DisplayableNode, Pa
 		if ( columns != null ) {
 			for ( int i = 0; i < columns.length; i++ ) {
 				buf.append( columns[i] );
-				if ( i < columns.length ) {
+				if ( i < columns.length - 1 ) {
 					buf.append( " " );
 				}
 			}
@@ -328,7 +331,7 @@ public class FromElement extends HqlSqlWalkerNode implements DisplayableNode, Pa
 			return cols[0];
 		}
 		else {
-			return "(" + StringHelper.join( ", ", cols ) + ")";
+			return "(" + String.join( ", ", cols ) + ")";
 		}
 	}
 
@@ -339,21 +342,16 @@ public class FromElement extends HqlSqlWalkerNode implements DisplayableNode, Pa
 			throw new IllegalStateException( "No table alias for node " + this );
 		}
 
-		final String propertyName;
-		if ( getEntityPersister() != null && getEntityPersister().getEntityMetamodel() != null
-				&& getEntityPersister().getEntityMetamodel().hasNonIdentifierPropertyNamedId() ) {
-			propertyName = getEntityPersister().getIdentifierPropertyName();
+		final String[] propertyNames = getIdentifierPropertyNames();
+		List<String> columns = new ArrayList<>();
+		final boolean inSelect = getWalker().getStatementType() == HqlSqlTokenTypes.SELECT;
+		for ( String propertyName : propertyNames ) {
+			String[] propertyNameColumns = toColumns( table, propertyName, inSelect );
+			for ( String propertyNameColumn : propertyNameColumns ) {
+				columns.add( propertyNameColumn );
+			}
 		}
-		else {
-			propertyName = EntityPersister.ENTITY_ID;
-		}
-
-		if ( getWalker().getStatementType() == HqlSqlTokenTypes.SELECT ) {
-			return getPropertyMapping( propertyName ).toColumns( table, propertyName );
-		}
-		else {
-			return getPropertyMapping( propertyName ).toColumns( propertyName );
-		}
+		return columns.toArray( new String[columns.size()] );
 	}
 
 	public void setCollectionJoin(boolean collectionJoin) {
@@ -400,7 +398,7 @@ public class FromElement extends HqlSqlWalkerNode implements DisplayableNode, Pa
 				ASTUtil.appendSibling( origin, this );
 			}
 			else {
-				if ( !getWalker().isInFrom() && !getWalker().isInSelect() && !getWalker().isInEntityGraph()) {
+				if ( !getWalker().isInFrom() && !getWalker().isInSelect() && !getWalker().isInEntityGraph() ) {
 					getFromClause().addChild( this );
 				}
 				else {
@@ -447,8 +445,21 @@ public class FromElement extends HqlSqlWalkerNode implements DisplayableNode, Pa
 		if ( origin == null ) {
 			return null;
 		}
-		if ( origin.getText() == null || "".equals( origin.getText() ) ) {
+		if ( StringHelper.isEmpty( origin.getText() ) ) {
 			return origin.getRealOrigin();
+		}
+		return origin;
+	}
+
+	public FromElement getFetchOrigin() {
+		if ( origin == null ) {
+			return null;
+		}
+		if ( !origin.isFetch() ) {
+			return origin;
+		}
+		if ( StringHelper.isEmpty( origin.getText() ) ) {
+			return origin.getFetchOrigin();
 		}
 		return origin;
 	}
@@ -505,6 +516,10 @@ public class FromElement extends HqlSqlWalkerNode implements DisplayableNode, Pa
 		return elementType.getPropertyType( propertyName, propertyPath );
 	}
 
+	public String getPropertyTableName(String propertyName) {
+		return elementType.getPropertyTableName( propertyName );
+	}
+
 	public String[] toColumns(String tableAlias, String path, boolean inSelect) {
 		return elementType.toColumns( tableAlias, path, inSelect );
 	}
@@ -519,6 +534,10 @@ public class FromElement extends HqlSqlWalkerNode implements DisplayableNode, Pa
 
 	public CollectionPropertyReference getCollectionPropertyReference(String propertyName) {
 		return elementType.getCollectionPropertyReference( propertyName );
+	}
+
+	public String[] getIdentifierPropertyNames() {
+		return elementType.getIdentifierPropertyNames();
 	}
 
 	public void setFetch(boolean fetch) {
@@ -610,26 +629,17 @@ public class FromElement extends HqlSqlWalkerNode implements DisplayableNode, Pa
 		isAllPropertyFetch = fetch;
 	}
 
+	public AST getWithClauseAst() {
+		return withClauseAst;
+	}
+
 	public String getWithClauseFragment() {
 		return withClauseFragment;
 	}
 
-	public String getWithClauseJoinAlias() {
-		return withClauseJoinAlias;
-	}
-
-	public void setWithClauseFragment(String withClauseJoinAlias, String withClauseFragment) {
-		this.withClauseJoinAlias = withClauseJoinAlias;
+	public void setWithClauseFragment(AST ast, String withClauseFragment) {
+		this.withClauseAst = ast;
 		this.withClauseFragment = withClauseFragment;
-	}
-
-	public boolean hasCacheablePersister() {
-		if ( getQueryableCollection() != null ) {
-			return getQueryableCollection().hasCache();
-		}
-		else {
-			return getQueryable().hasCache();
-		}
 	}
 
 	public void handlePropertyBeingDereferenced(Type propertySource, String propertyName) {
@@ -677,24 +687,35 @@ public class FromElement extends HqlSqlWalkerNode implements DisplayableNode, Pa
 
 
 	// ParameterContainer impl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	private List<ParameterSpecification> embeddedParameters;
+	private List<ParameterSpecification> embeddedParameters = new ArrayList<>(  );
 
 	@Override
 	public void addEmbeddedParameter(ParameterSpecification specification) {
-		if ( embeddedParameters == null ) {
-			embeddedParameters = new ArrayList<ParameterSpecification>();
-		}
 		embeddedParameters.add( specification );
 	}
 
 	@Override
 	public boolean hasEmbeddedParameters() {
-		return embeddedParameters != null && ! embeddedParameters.isEmpty();
+		return !embeddedParameters.isEmpty();
 	}
 
 	@Override
 	public ParameterSpecification[] getEmbeddedParameters() {
-		return embeddedParameters.toArray( new ParameterSpecification[ embeddedParameters.size() ] );
+		final List<ParameterSpecification> parameterSpecification = getParameterSpecification();
+		return parameterSpecification.toArray( new ParameterSpecification[ parameterSpecification.size() ] );
+	}
+
+	private List<ParameterSpecification> getParameterSpecification() {
+		List<ParameterSpecification> parameterSpecifications =
+			embeddedParameters.stream()
+					.filter( o -> o instanceof  DynamicFilterParameterSpecification )
+					.collect( Collectors.toList() );
+
+		parameterSpecifications.addAll(
+			embeddedParameters.stream()
+					.filter( o -> ! (o instanceof  DynamicFilterParameterSpecification ) )
+					.collect( Collectors.toList() ) );
+		return parameterSpecifications;
 	}
 
 	public ParameterSpecification getIndexCollectionSelectorParamSpec() {

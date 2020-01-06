@@ -17,15 +17,16 @@ import java.util.Map;
 
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
+import org.hibernate.boot.Metadata;
 import org.hibernate.boot.model.naming.Identifier;
 import org.hibernate.boot.model.relational.Exportable;
 import org.hibernate.boot.model.relational.InitCommand;
 import org.hibernate.boot.model.relational.Namespace;
 import org.hibernate.boot.model.relational.QualifiedTableName;
 import org.hibernate.dialect.Dialect;
+import org.hibernate.engine.jdbc.env.spi.JdbcEnvironment;
 import org.hibernate.engine.jdbc.env.spi.QualifiedObjectNameFormatter;
 import org.hibernate.engine.spi.Mapping;
-import org.hibernate.internal.util.StringHelper;
 import org.hibernate.tool.hbm2ddl.ColumnMetadata;
 import org.hibernate.tool.hbm2ddl.TableMetadata;
 import org.hibernate.tool.schema.extract.spi.ColumnInformation;
@@ -407,7 +408,7 @@ public class Table implements RelationalModel, Serializable, Exportable {
 				&& Identifier.areEqual( schema, table.schema )
 				&& Identifier.areEqual( catalog, table.catalog );
 	}
-	
+
 	public void validateColumns(Dialect dialect, Mapping mapping, TableMetadata tableInfo) {
 		Iterator iter = getColumnIterator();
 		while ( iter.hasNext() ) {
@@ -438,19 +439,29 @@ public class Table implements RelationalModel, Serializable, Exportable {
 
 	public Iterator sqlAlterStrings(
 			Dialect dialect,
-			Mapping p,
+			Metadata metadata,
 			TableInformation tableInfo,
-			String defaultCatalog,
-			String defaultSchema) throws HibernateException {
+			Identifier defaultCatalog,
+			Identifier defaultSchema) throws HibernateException {
 
-		StringBuilder root = new StringBuilder( "alter table " )
-				.append( getQualifiedName( dialect, defaultCatalog, defaultSchema ) )
+		final JdbcEnvironment jdbcEnvironment = metadata.getDatabase().getJdbcEnvironment();
+
+		final String tableName = jdbcEnvironment.getQualifiedObjectNameFormatter().format(
+				new QualifiedTableName(
+					catalog != null ? catalog : defaultCatalog,
+					schema != null ? schema : defaultSchema,
+					name
+				),
+				dialect
+		);
+
+		StringBuilder root = new StringBuilder( dialect.getAlterTableString( tableName ) )
 				.append( ' ' )
 				.append( dialect.getAddColumnString() );
 
 		Iterator iter = getColumnIterator();
 		List results = new ArrayList();
-		
+
 		while ( iter.hasNext() ) {
 			final Column column = (Column) iter.next();
 			final ColumnInformation columnInfo = tableInfo.getColumn( Identifier.toIdentifier( column.getName(), column.isQuoted() ) );
@@ -461,7 +472,7 @@ public class Table implements RelationalModel, Serializable, Exportable {
 						.append( ' ' )
 						.append( column.getQuotedName( dialect ) )
 						.append( ' ' )
-						.append( column.getSqlType( dialect, p ) );
+						.append( column.getSqlType( dialect, metadata ) );
 
 				String defaultValue = column.getDefaultValue();
 				if ( defaultValue != null ) {
@@ -558,7 +569,7 @@ public class Table implements RelationalModel, Serializable, Exportable {
 				}
 
 			}
-			
+
 			if ( col.isUnique() ) {
 				String keyName = Constraint.generateName( "UK_", this, col );
 				UniqueKey uk = getOrCreateUniqueKey( keyName );
@@ -566,7 +577,7 @@ public class Table implements RelationalModel, Serializable, Exportable {
 				buf.append( dialect.getUniqueDelegate()
 						.getColumnDefinitionUniquenessFragment( col ) );
 			}
-				
+
 			if ( col.hasCheckConstraint() && dialect.supportsColumnCheck() ) {
 				buf.append( " check (" )
 						.append( col.getCheckConstraint() )
@@ -705,7 +716,7 @@ public class Table implements RelationalModel, Serializable, Exportable {
 			}
 
 			// NOTE : if the name is null, we will generate an implicit name during second pass processing
-			// afterQuery we know the referenced table name (which might not be resolved yet).
+			// after we know the referenced table name (which might not be resolved yet).
 			fk.setName( keyName );
 
 			foreignKeys.put( key, fk );
@@ -877,9 +888,9 @@ public class Table implements RelationalModel, Serializable, Exportable {
 		@Override
 		public String toString() {
 			return "ForeignKeyKey{" +
-					"columns=" + StringHelper.join( ",", columns ) +
+					"columns=" + String.join( ",", columns ) +
 					", referencedClassName='" + referencedClassName + '\'' +
-					", referencedColumns=" + StringHelper.join( ",", referencedColumns ) +
+					", referencedColumns=" + String.join( ",", referencedColumns ) +
 					'}';
 		}
 	}

@@ -35,8 +35,6 @@ import static org.junit.Assert.assertEquals;
  */
 public class BatchTest extends BaseEntityManagerFunctionalTestCase {
 
-	private static final Logger log = Logger.getLogger( BatchTest.class );
-
 	@Override
 	protected Class<?>[] getAnnotatedClasses() {
 		return new Class<?>[] {
@@ -202,15 +200,15 @@ public class BatchTest extends BaseEntityManagerFunctionalTestCase {
 
 			int batchSize = 25;
 
-			for ( int i = 0; i < entityCount; ++i ) {
-				Person Person = new Person( String.format( "Person %d", i ) );
-				entityManager.persist( Person );
-
-				if ( i % batchSize == 0 ) {
+			for ( int i = 0; i < entityCount; i++ ) {
+				if ( i > 0 && i % batchSize == 0 ) {
 					//flush a batch of inserts and release memory
 					entityManager.flush();
 					entityManager.clear();
 				}
+
+				Person Person = new Person( String.format( "Person %d", i ) );
+				entityManager.persist( Person );
 			}
 
 			txn.commit();

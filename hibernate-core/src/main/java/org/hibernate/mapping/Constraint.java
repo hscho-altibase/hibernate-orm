@@ -75,7 +75,16 @@ public abstract class Constraint implements RelationalModel, Exportable, Seriali
 	 * @return String The generated name
 	 */
 	public static String generateName(String prefix, Table table, List<Column> columns) {
-		return generateName( prefix, table, columns.toArray( new Column[columns.size()] ) );
+		//N.B. legacy APIs are involved: can't trust that the columns List is actually
+		//containing Column instances - the generic type isn't consistently enforced.
+		ArrayList<Column> defensive = new ArrayList<>( columns.size() );
+		for ( Object o : columns ) {
+			if ( o instanceof Column ) {
+				defensive.add( (Column) o );
+			}
+			//else: others might be Formula instances. They don't need to be part of the name generation.
+		}
+		return generateName( prefix, table, defensive.toArray( new Column[0] ) );
 	}
 
 	/**
@@ -165,10 +174,11 @@ public abstract class Constraint implements RelationalModel, Exportable, Seriali
 
 	public String sqlDropString(Dialect dialect, String defaultCatalog, String defaultSchema) {
 		if ( isGenerated( dialect ) ) {
+			final String tableName = getTable().getQualifiedName( dialect, defaultCatalog, defaultSchema );
 			return String.format(
 					Locale.ROOT,
-					"alter table %s drop constraint %s",
-					getTable().getQualifiedName( dialect, defaultCatalog, defaultSchema ),
+					"%s evictData constraint %s",
+					dialect.getAlterTableString( tableName ),
 					dialect.quote( getName() )
 			);
 		}
@@ -184,8 +194,8 @@ public abstract class Constraint implements RelationalModel, Exportable, Seriali
 			// empty string.  Prevent blank "alter table" statements.
 			String constraintString = sqlConstraintString( dialect, getName(), defaultCatalog, defaultSchema );
 			if ( !StringHelper.isEmpty( constraintString ) ) {
-				return "alter table " + getTable().getQualifiedName( dialect, defaultCatalog, defaultSchema )
-						+ constraintString;
+				final String tableName = getTable().getQualifiedName( dialect, defaultCatalog, defaultSchema );
+				return dialect.getAlterTableString( tableName ) + " " + constraintString;
 			}
 		}
 		return null;

@@ -11,23 +11,27 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 
 import org.hibernate.HibernateException;
+import org.hibernate.LockMode;
+import org.hibernate.LockOptions;
 import org.hibernate.PersistentObjectException;
 import org.hibernate.UnresolvableObjectException;
-import org.hibernate.action.spi.AfterTransactionCompletionProcess;
-import org.hibernate.cache.spi.access.CollectionRegionAccessStrategy;
-import org.hibernate.cache.spi.access.EntityRegionAccessStrategy;
+import org.hibernate.cache.spi.access.CollectionDataAccess;
+import org.hibernate.cache.spi.access.EntityDataAccess;
 import org.hibernate.cache.spi.access.SoftLock;
 import org.hibernate.engine.internal.Cascade;
 import org.hibernate.engine.internal.CascadePoint;
+import org.hibernate.engine.spi.ActionQueue;
 import org.hibernate.engine.spi.CascadingActions;
 import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.engine.spi.EntityKey;
-import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.engine.spi.PersistenceContext;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.RefreshEvent;
 import org.hibernate.event.spi.RefreshEventListener;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
+import org.hibernate.metamodel.spi.MetamodelImplementor;
 import org.hibernate.persister.collection.CollectionPersister;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.pretty.MessageHelper;
@@ -56,23 +60,29 @@ public class DefaultRefreshEventListener implements RefreshEventListener {
 	public void onRefresh(RefreshEvent event, Map refreshedAlready) {
 
 		final EventSource source = event.getSession();
-
-		boolean isTransient = !source.contains( event.getObject() );
-		if ( source.getPersistenceContext().reassociateIfUninitializedProxy( event.getObject() ) ) {
+		boolean isTransient;
+		if ( event.getEntityName() != null ) {
+			isTransient = !source.contains( event.getEntityName(), event.getObject() );
+		}
+		else {
+			isTransient = !source.contains( event.getObject() );
+		}
+		final PersistenceContext persistenceContext = source.getPersistenceContextInternal();
+		if ( persistenceContext.reassociateIfUninitializedProxy( event.getObject() ) ) {
 			if ( isTransient ) {
 				source.setReadOnly( event.getObject(), source.isDefaultReadOnly() );
 			}
 			return;
 		}
 
-		final Object object = source.getPersistenceContext().unproxyAndReassociate( event.getObject() );
+		final Object object = persistenceContext.unproxyAndReassociate( event.getObject() );
 
 		if ( refreshedAlready.containsKey( object ) ) {
 			LOG.trace( "Already refreshed" );
 			return;
 		}
 
-		final EntityEntry e = source.getPersistenceContext().getEntry( object );
+		final EntityEntry e = persistenceContext.getEntry( object );
 		final EntityPersister persister;
 		final Serializable id;
 
@@ -92,7 +102,7 @@ public class DefaultRefreshEventListener implements RefreshEventListener {
 				);
 			}
 			final EntityKey key = source.generateEntityKey( id, persister );
-			if ( source.getPersistenceContext().getEntry( key ) != null ) {
+			if ( persistenceContext.getEntry( key ) != null ) {
 				throw new PersistentObjectException(
 						"attempted to refresh transient instance when persistent instance was already associated with the Session: " +
 								MessageHelper.infoString( persister, id, source.getFactory() )
@@ -133,13 +143,13 @@ public class DefaultRefreshEventListener implements RefreshEventListener {
 
 		if ( e != null ) {
 			final EntityKey key = source.generateEntityKey( id, persister );
-			source.getPersistenceContext().removeEntity( key );
+			persistenceContext.removeEntity( key );
 			if ( persister.hasCollections() ) {
-				new EvictVisitor( source ).process( object, persister );
+				new EvictVisitor( source, object ).process( object, persister );
 			}
 		}
 
-		if ( persister.hasCache() ) {
+		if ( persister.canWriteToCache() ) {
 			Object previousVersion = null;
 			if ( persister.isVersionPropertyGenerated() ) {
 				// we need to grab the version value from the entity, otherwise
@@ -147,7 +157,7 @@ public class DefaultRefreshEventListener implements RefreshEventListener {
 				// multiple actions queued during the same flush
 				previousVersion = persister.getVersion( object );
 			}
-			final EntityRegionAccessStrategy cache = persister.getCacheAccessStrategy();
+			final EntityDataAccess cache = persister.getCacheAccessStrategy();
 			final Object ck = cache.generateCacheKey(
 					id,
 					persister,
@@ -155,23 +165,63 @@ public class DefaultRefreshEventListener implements RefreshEventListener {
 					source.getTenantIdentifier()
 			);
 			final SoftLock lock = cache.lockItem( source, ck, previousVersion );
-			source.getActionQueue().registerProcess( new AfterTransactionCompletionProcess() {
-				@Override
-				public void doAfterTransactionCompletion(boolean success, SharedSessionContractImplementor session) {
-					cache.unlockItem( session, ck, lock );
-				}
-			} );
 			cache.remove( source, ck );
+			source.getActionQueue().registerProcess( (success, session) -> cache.unlockItem( session, ck, lock ) );
 		}
 
 		evictCachedCollections( persister, id, source );
 
 		String previousFetchProfile = source.getLoadQueryInfluencers().getInternalFetchProfile();
 		source.getLoadQueryInfluencers().setInternalFetchProfile( "refresh" );
-		Object result = persister.load( id, object, event.getLockOptions(), source );
-		// Keep the same read-only/modifiable setting for the entity that it had beforeQuery refreshing;
-		// If it was transient, then set it to the default for the source.
+
+
+		// Handle the requested lock-mode (if one) in relation to the entry's (if one) current lock-mode
+
+		LockOptions lockOptionsToUse = event.getLockOptions();
+
+		final LockMode requestedLockMode = lockOptionsToUse.getLockMode();
+		LockMode postRefreshLockMode = null;
+
+		if ( e != null ) {
+			final LockMode currentLockMode = e.getLockMode();
+			if ( currentLockMode.greaterThan( requestedLockMode ) ) {
+				// the requested lock-mode is less restrictive than the current one
+				//		- pass along the current lock-mode (after accounting for WRITE)
+				lockOptionsToUse = LockOptions.copy( event.getLockOptions(), new LockOptions() );
+				if ( currentLockMode == LockMode.WRITE ||
+						currentLockMode == LockMode.PESSIMISTIC_WRITE ||
+						currentLockMode == LockMode.PESSIMISTIC_READ ) {
+					// our transaction should already hold the exclusive lock on
+					// the underlying row - so READ should be sufficient.
+					//
+					// in fact, this really holds true for any current lock-mode that indicates we
+					// hold an exclusive lock on the underlying row - but we *need* to handle
+					// WRITE specially because the Loader/Locker mechanism does not allow for WRITE
+					// locks
+					lockOptionsToUse.setLockMode( LockMode.READ );
+
+					// and prepare to reset the entry lock-mode to the previous lock mode after
+					// the refresh completes
+					postRefreshLockMode = currentLockMode;
+				}
+				else {
+					lockOptionsToUse.setLockMode( currentLockMode );
+				}
+			}
+		}
+
+		final Object result = persister.load( id, object, lockOptionsToUse, source );
+
 		if ( result != null ) {
+			// apply `postRefreshLockMode`, if needed
+			if ( postRefreshLockMode != null ) {
+				// if we get here, there was a previous entry and we need to re-set its lock-mode
+				//		- however, the refresh operation actually creates a new entry, so get it
+				persistenceContext.getEntry( result ).setLockMode( postRefreshLockMode );
+			}
+
+			// Keep the same read-only/modifiable setting for the entity that it had before refreshing;
+			// If it was transient, then set it to the default for the source.
 			if ( !persister.isMutable() ) {
 				// this is probably redundant; it should already be read-only
 				source.setReadOnly( result, true );
@@ -192,25 +242,23 @@ public class DefaultRefreshEventListener implements RefreshEventListener {
 
 	private void evictCachedCollections(Type[] types, Serializable id, EventSource source)
 			throws HibernateException {
+		final ActionQueue actionQueue = source.getActionQueue();
+		final SessionFactoryImplementor factory = source.getFactory();
+		final MetamodelImplementor metamodel = factory.getMetamodel();
 		for ( Type type : types ) {
 			if ( type.isCollectionType() ) {
-				CollectionPersister collectionPersister = source.getFactory().getMetamodel().collectionPersister( ( (CollectionType) type ).getRole() );
+				CollectionPersister collectionPersister = metamodel.collectionPersister( ( (CollectionType) type ).getRole() );
 				if ( collectionPersister.hasCache() ) {
-					final CollectionRegionAccessStrategy cache = collectionPersister.getCacheAccessStrategy();
+					final CollectionDataAccess cache = collectionPersister.getCacheAccessStrategy();
 					final Object ck = cache.generateCacheKey(
 						id,
 						collectionPersister,
-						source.getFactory(),
+						factory,
 						source.getTenantIdentifier()
 					);
 					final SoftLock lock = cache.lockItem( source, ck, null );
-					source.getActionQueue().registerProcess( new AfterTransactionCompletionProcess() {
-						@Override
-						public void doAfterTransactionCompletion(boolean success, SharedSessionContractImplementor session) {
-							cache.unlockItem( session, ck, lock );
-						}
-					} );
 					cache.remove( source, ck );
+					actionQueue.registerProcess( (success, session) -> cache.unlockItem( session, ck, lock ) );
 				}
 			}
 			else if ( type.isComponentType() ) {

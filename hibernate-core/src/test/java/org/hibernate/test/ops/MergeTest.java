@@ -19,6 +19,11 @@ import org.hibernate.Session;
 import org.hibernate.StaleObjectStateException;
 import org.hibernate.Transaction;
 import org.hibernate.criterion.Projections;
+import org.hibernate.dialect.AbstractHANADialect;
+
+import org.hibernate.testing.DialectChecks;
+import org.hibernate.testing.RequiresDialectFeature;
+import org.hibernate.testing.SkipForDialect;
 
 import static org.hibernate.testing.junit4.ExtraAssertions.assertTyping;
 import static org.junit.Assert.assertEquals;
@@ -31,6 +36,7 @@ import static org.junit.Assert.fail;
 /**
  * @author Gavin King
  */
+@RequiresDialectFeature(DialectChecks.SupportsNoColumnInsert.class)
 public class MergeTest extends AbstractOperationTestCase {
 	@Test
 	public void testMergeStaleVersionFails() throws Exception {
@@ -722,6 +728,7 @@ public class MergeTest extends AbstractOperationTestCase {
 
 	@Test
 	@SuppressWarnings( {"unchecked"})
+	@SkipForDialect(value = AbstractHANADialect.class, comment = " HANA doesn't support tables consisting of only a single auto-generated column")
 	public void testRecursiveMergeTransient() {
 		Session s = openSession();
 		Transaction tx = s.beginTransaction();
@@ -768,6 +775,7 @@ public class MergeTest extends AbstractOperationTestCase {
 
 	@SuppressWarnings( {"unchecked"})
 	@Test
+	@SkipForDialect(value = AbstractHANADialect.class, comment = " HANA doesn't support tables consisting of only a single auto-generated column")
 	public void testMergeManyToManyWithCollectionDeference() throws Exception {
 		// setup base data...
 		Session s = openSession();

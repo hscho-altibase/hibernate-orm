@@ -53,7 +53,7 @@ import org.jboss.logging.Logger;
 @SuppressWarnings("unchecked")
 public class TableBinder {
 	//TODO move it to a getter/setter strategy
-	private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class, TableBinder.class.getName());
+	private static final CoreMessageLogger LOG = Logger.getMessageLogger( CoreMessageLogger.class, TableBinder.class.getName() );
 
 	MetadataBuildingContext buildingContext;
 
@@ -137,21 +137,12 @@ public class TableBinder {
 	// only bind association table currently
 	public Table bind() {
 		final Identifier ownerEntityTableNameIdentifier = toIdentifier( ownerEntityTable );
-		final Identifier associatedEntityTableNameIdentifier = toIdentifier( associatedEntityTable );
 
 		//logicalName only accurate for assoc table...
 		final String unquotedOwnerTable = StringHelper.unquote( ownerEntityTable );
 		final String unquotedAssocTable = StringHelper.unquote( associatedEntityTable );
 
-		//@ElementCollection use ownerEntity_property instead of the cleaner ownerTableName_property
-		// ownerEntity can be null when the table name is explicitly set; <== gb: doesn't seem to be true...
-		final String ownerObjectName = isJPA2ElementCollection && ownerEntity != null
-				? StringHelper.unqualify( ownerEntity )
-				: unquotedOwnerTable;
-		final ObjectNameSource nameSource = buildNameContext(
-				ownerObjectName,
-				unquotedAssocTable
-		);
+		final ObjectNameSource nameSource = buildNameContext();
 
 		final boolean ownerEntityTableQuoted = StringHelper.isQuoted( ownerEntityTable );
 		final boolean associatedEntityTableQuoted = StringHelper.isQuoted( associatedEntityTable );
@@ -318,9 +309,7 @@ public class TableBinder {
 				.toIdentifier( tableName );
 	}
 
-	private ObjectNameSource buildNameContext(
-			String unquotedOwnerTable,
-			String unquotedAssocTable) {
+	private ObjectNameSource buildNameContext() {
 		if ( name != null ) {
 			return new AssociationTableNameSource( name, null );
 		}
@@ -487,10 +476,10 @@ public class TableBinder {
 			MetadataBuildingContext buildingContext,
 			String subselect,
 			InFlightMetadataCollector.EntityTableXref denormalizedSuperTableXref) {
-		schema = BinderHelper.isEmptyAnnotationValue( schema )
+		schema = BinderHelper.isEmptyOrNullAnnotationValue( schema )
 				? extract( buildingContext.getMetadataCollector().getDatabase().getDefaultNamespace().getPhysicalName().getSchema() )
 				: schema;
-		catalog = BinderHelper.isEmptyAnnotationValue( catalog )
+		catalog = BinderHelper.isEmptyOrNullAnnotationValue( catalog )
 				? extract( buildingContext.getMetadataCollector().getDatabase().getDefaultNamespace().getPhysicalName().getCatalog() )
 				: catalog;
 
@@ -668,7 +657,8 @@ public class TableBinder {
 					//explicit referencedColumnName
 					Iterator idColItr = referencedEntity.getKey().getColumnIterator();
 					org.hibernate.mapping.Column col;
-					Table table = referencedEntity.getTable(); //works cause the pk has to be on the primary table
+					//works cause the pk has to be on the primary table
+					Table table = referencedEntity.getTable();
 					if ( !idColItr.hasNext() ) {
 						LOG.debug( "No column in the identifier!" );
 					}

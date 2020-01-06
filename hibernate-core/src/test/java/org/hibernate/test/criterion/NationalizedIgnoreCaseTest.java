@@ -12,8 +12,6 @@ import javax.persistence.Id;
 import javax.persistence.Table;
 
 import org.hibernate.Criteria;
-import org.hibernate.Session;
-import org.hibernate.Transaction;
 import org.hibernate.annotations.Nationalized;
 import org.hibernate.criterion.Restrictions;
 import org.hibernate.dialect.DB2Dialect;
@@ -24,6 +22,7 @@ import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
 
+import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -41,27 +40,20 @@ public class NationalizedIgnoreCaseTest extends BaseCoreFunctionalTestCase {
 	
 	@Test
 	public void testIgnoreCaseCriteria() {
-		
-		Session session = openSession();
-		Transaction trx = session.getTransaction();
-		
+
 		User user1 = new User(1, "Chris");
 		User user2 = new User(2, "Steve");
-		
-		// persist the records
-		trx.begin();		
-		session.save(user1);
-		session.save(user2);
-		trx.commit();
-		session.close();
-		
-		session = openSession();
-		trx = session.getTransaction();
-		
-		Criteria criteria = session.createCriteria(User.class);
-		criteria.add(Restrictions.eq("name", user1.getName().toLowerCase()).ignoreCase());
-		assertEquals(1, criteria.list().size());
-			
+
+		doInHibernate( this::sessionFactory, session -> {
+			session.save(user1);
+			session.save(user2);
+		} );
+
+		doInHibernate( this::sessionFactory, session -> {
+			Criteria criteria = session.createCriteria(User.class);
+			criteria.add(Restrictions.eq("name", user1.getName().toLowerCase()).ignoreCase());
+			assertEquals(1, criteria.list().size());
+		} );
 	}
 	
 	@Entity(name = "User")

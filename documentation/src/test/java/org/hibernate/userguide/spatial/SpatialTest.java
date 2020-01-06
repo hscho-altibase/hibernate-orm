@@ -11,17 +11,18 @@ import javax.persistence.Id;
 
 import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
 import org.hibernate.spatial.dialect.postgis.PostgisDialect;
+import org.hibernate.spatial.dialect.postgis.PostgisPG95Dialect;
 
 import org.hibernate.testing.RequiresDialect;
 import org.junit.Test;
 
-import com.vividsolutions.jts.geom.Coordinate;
+import org.locationtech.jts.geom.Coordinate;
 //tag::spatial-types-mapping-example[]
-import com.vividsolutions.jts.geom.Point;
+import org.locationtech.jts.geom.Point;
 
 //end::spatial-types-mapping-example[]
-import com.vividsolutions.jts.geom.GeometryFactory;
-import com.vividsolutions.jts.geom.Polygon;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Polygon;
 
 import static org.junit.Assert.assertEquals;
 
@@ -30,10 +31,10 @@ import static org.hibernate.testing.transaction.TransactionUtil.doInJPA;
 /**
  * @author Vlad Mihalcea
  */
-@RequiresDialect(PostgisDialect.class)
+@RequiresDialect(PostgisPG95Dialect.class)
 public class SpatialTest extends BaseEntityManagerFunctionalTestCase {
 
-    GeometryFactory geometryFactory = new GeometryFactory();
+    private GeometryFactory geometryFactory = new GeometryFactory();
 
     @Override
     protected Class<?>[] getAnnotatedClasses() {

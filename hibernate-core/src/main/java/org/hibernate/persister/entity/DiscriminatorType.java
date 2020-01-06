@@ -10,6 +10,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Map;
+import java.util.Objects;
 
 import org.hibernate.EntityMode;
 import org.hibernate.HibernateException;
@@ -19,7 +20,6 @@ import org.hibernate.engine.spi.Mapping;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.internal.util.collections.ArrayHelper;
-import org.hibernate.internal.util.compare.EqualsHelper;
 import org.hibernate.type.AbstractType;
 import org.hibernate.type.Type;
 
@@ -37,18 +37,22 @@ public class DiscriminatorType extends AbstractType {
 		this.persister = persister;
 	}
 
+	@Override
 	public Class getReturnedClass() {
 		return Class.class;
 	}
 
+	@Override
 	public String getName() {
 		return getClass().getName();
 	}
 
+	@Override
 	public boolean isMutable() {
 		return false;
 	}
 
+	@Override
 	public Object nullSafeGet(
 			ResultSet rs,
 			String[] names,
@@ -57,6 +61,7 @@ public class DiscriminatorType extends AbstractType {
 		return nullSafeGet( rs, names[0], session, owner );
 	}
 
+	@Override
 	public Object nullSafeGet(
 			ResultSet rs,
 			String name,
@@ -71,6 +76,7 @@ public class DiscriminatorType extends AbstractType {
 		return ( EntityMode.POJO == entityPersister.getEntityMode() ) ? entityPersister.getMappedClass() : entityName;
 	}
 
+	@Override
 	public void nullSafeSet(
 			PreparedStatement st,
 			Object value,
@@ -80,6 +86,7 @@ public class DiscriminatorType extends AbstractType {
 		nullSafeSet( st, value, index, session );
 	}
 
+	@Override
 	public void nullSafeSet(
 			PreparedStatement st,
 			Object value,
@@ -90,34 +97,40 @@ public class DiscriminatorType extends AbstractType {
 		underlyingType.nullSafeSet(st, entityPersister.getDiscriminatorValue(), index, session);
 	}
 
+	@Override
 	public String toLoggableString(Object value, SessionFactoryImplementor factory) throws HibernateException {
 		return value == null ? "[null]" : value.toString();
 	}
 
+	@Override
 	public Object deepCopy(Object value, SessionFactoryImplementor factory)
 			throws HibernateException {
 		return value;
 	}
 
+	@Override
 	public Object replace(Object original, Object target, SharedSessionContractImplementor session, Object owner, Map copyCache)
 			throws HibernateException {
 		return original;
 	}
 
+	@Override
 	public boolean[] toColumnNullness(Object value, Mapping mapping) {
 		return value == null
 				? ArrayHelper.FALSE
 				: ArrayHelper.TRUE;
 	}
 
+	@Override
 	public boolean isDirty(Object old, Object current, boolean[] checkable, SharedSessionContractImplementor session)
 			throws HibernateException {
-		return EqualsHelper.equals( old, current );
+		return Objects.equals( old, current );
 	}
 
 
 	// simple delegation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+	@Override
 	public int[] sqlTypes(Mapping mapping) throws MappingException {
 		return underlyingType.sqlTypes( mapping );
 	}
@@ -132,6 +145,7 @@ public class DiscriminatorType extends AbstractType {
 		return underlyingType.defaultSizes( mapping );
 	}
 
+	@Override
 	public int getColumnSpan(Mapping mapping) throws MappingException {
 		return underlyingType.getColumnSpan( mapping );
 	}

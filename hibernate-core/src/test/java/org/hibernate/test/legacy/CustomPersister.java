@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.hibernate.EntityMode;
 import org.hibernate.HibernateException;
@@ -19,8 +20,8 @@ import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
 import org.hibernate.MappingException;
 import org.hibernate.bytecode.spi.BytecodeEnhancementMetadata;
-import org.hibernate.cache.spi.access.EntityRegionAccessStrategy;
-import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
+import org.hibernate.cache.spi.access.EntityDataAccess;
+import org.hibernate.cache.spi.access.NaturalIdDataAccess;
 import org.hibernate.cache.spi.entry.CacheEntry;
 import org.hibernate.cache.spi.entry.CacheEntryStructure;
 import org.hibernate.cache.spi.entry.StandardCacheEntryImpl;
@@ -40,9 +41,9 @@ import org.hibernate.id.IdentifierGenerator;
 import org.hibernate.id.UUIDHexGenerator;
 import org.hibernate.internal.FilterAliasGenerator;
 import org.hibernate.internal.StaticFilterAliasGenerator;
-import org.hibernate.internal.util.compare.EqualsHelper;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.metadata.ClassMetadata;
+import org.hibernate.metamodel.model.domain.NavigableRole;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.persister.entity.MultiLoadOptions;
 import org.hibernate.persister.spi.PersisterCreationContext;
@@ -66,8 +67,8 @@ public class CustomPersister implements EntityPersister {
 	@SuppressWarnings("UnusedParameters")
 	public CustomPersister(
 			PersistentClass model,
-			EntityRegionAccessStrategy cacheAccessStrategy,
-			NaturalIdRegionAccessStrategy naturalIdRegionAccessStrategy,
+			EntityDataAccess cacheAccessStrategy,
+			NaturalIdDataAccess naturalIdRegionAccessStrategy,
 			PersisterCreationContext creationContext) {
 		this.factory = creationContext.getSessionFactory();
 		this.entityMetamodel = new EntityMetamodel( model, this, factory );
@@ -83,6 +84,11 @@ public class CustomPersister implements EntityPersister {
 
 	public SessionFactoryImplementor getFactory() {
 		return factory;
+	}
+
+	@Override
+	public NavigableRole getNavigableRole() {
+		return new NavigableRole( getEntityName() );
 	}
 
 	@Override
@@ -239,7 +245,7 @@ public class CustomPersister implements EntityPersister {
 		Object[] y,
 		Object owner,
 		SharedSessionContractImplementor session) throws HibernateException {
-		if ( !EqualsHelper.equals( x[0], y[0] ) ) {
+		if ( !Objects.equals( x[0], y[0] ) ) {
 			return new int[] { 0 };
 		}
 		else {
@@ -252,7 +258,7 @@ public class CustomPersister implements EntityPersister {
 		Object[] y,
 		Object owner,
 		SharedSessionContractImplementor session) throws HibernateException {
-		if ( !EqualsHelper.equals( x[0], y[0] ) ) {
+		if ( !Objects.equals( x[0], y[0] ) ) {
 			return new int[] { 0 };
 		}
 		else {
@@ -350,6 +356,7 @@ public class CustomPersister implements EntityPersister {
 					session,
 					new PreLoadEvent( (EventSource) session )
 			);
+			TwoPhaseLoad.afterInitialize( clone, session );
 			TwoPhaseLoad.postLoad( clone, session, new PostLoadEvent( (EventSource) session ) );
 		}
 		return clone;
@@ -472,15 +479,15 @@ public class CustomPersister implements EntityPersister {
 		return false;
 	}
 
-	public EntityRegionAccessStrategy getCacheAccessStrategy() {
+	public EntityDataAccess getCacheAccessStrategy() {
 		return null;
 	}
-	
+
 	public boolean hasNaturalIdCache() {
 		return false;
 	}
 
-	public NaturalIdRegionAccessStrategy getNaturalIdCacheAccessStrategy() {
+	public NaturalIdDataAccess getNaturalIdCacheAccessStrategy() {
 		return null;
 	}
 
@@ -654,6 +661,16 @@ public class CustomPersister implements EntityPersister {
 	}
 
 	@Override
+	public boolean canReadFromCache() {
+		return false;
+	}
+
+	@Override
+	public boolean canWriteToCache() {
+		return false;
+	}
+
+	@Override
 	public boolean isVersionPropertyGenerated() {
 		return false;
 	}
@@ -669,7 +686,6 @@ public class CustomPersister implements EntityPersister {
 		return null;
 	}
 
-	@Override
 	public Comparator getVersionComparator() {
 		return null;
 	}

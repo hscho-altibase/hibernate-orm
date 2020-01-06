@@ -15,7 +15,7 @@ import java.util.Set;
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
 import org.hibernate.cache.CacheException;
-import org.hibernate.cache.spi.access.CollectionRegionAccessStrategy;
+import org.hibernate.cache.spi.access.CollectionDataAccess;
 import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.engine.jdbc.batch.internal.BasicBatchKey;
 import org.hibernate.engine.spi.LoadQueryInfluencers;
@@ -64,7 +64,7 @@ public class OneToManyPersister extends AbstractCollectionPersister {
 
 	public OneToManyPersister(
 			Collection collectionBinding,
-			CollectionRegionAccessStrategy cacheAccessStrategy,
+			CollectionDataAccess cacheAccessStrategy,
 			PersisterCreationContext creationContext) throws MappingException, CacheException {
 		super( collectionBinding, cacheAccessStrategy, creationContext );
 		cascadeDeleteEnabled = collectionBinding.getKey().isCascadeDeleteEnabled()
@@ -84,7 +84,11 @@ public class OneToManyPersister extends AbstractCollectionPersister {
 				.addPrimaryKeyColumns( keyColumnNames );
 
 		if ( hasIndex && !indexContainsFormula ) {
-			update.addColumns( indexColumnNames, "null" );
+			for ( int i = 0 ; i < indexColumnNames.length ; i++ ) {
+				if ( indexColumnIsSettable[i] ) {
+					update.addColumn( indexColumnNames[i], "null" );
+				}
+			}
 		}
 
 		if ( hasWhere ) {
@@ -108,7 +112,11 @@ public class OneToManyPersister extends AbstractCollectionPersister {
 				.addColumns( keyColumnNames );
 
 		if ( hasIndex && !indexContainsFormula ) {
-			update.addColumns( indexColumnNames );
+			for ( int i = 0 ; i < indexColumnNames.length ; i++ ) {
+				if ( indexColumnIsSettable[i] ) {
+					update.addColumn( indexColumnNames[i] );
+				}
+			}
 		}
 
 		//identifier collections not supported for 1-to-many
@@ -132,7 +140,11 @@ public class OneToManyPersister extends AbstractCollectionPersister {
 			update.addPrimaryKeyColumns( new String[] {identifierColumnName} );
 		}
 		if ( hasIndex && !indexContainsFormula ) {
-			update.addColumns( indexColumnNames );
+			for ( int i = 0 ; i < indexColumnNames.length ; i++ ) {
+				if ( indexColumnIsSettable[i] ) {
+					update.addColumn( indexColumnNames[i] );
+				}
+			}
 		}
 
 		return update.toStatementString();
@@ -149,7 +161,11 @@ public class OneToManyPersister extends AbstractCollectionPersister {
 				.addColumns( keyColumnNames, "null" );
 
 		if ( hasIndex && !indexContainsFormula ) {
-			update.addColumns( indexColumnNames, "null" );
+			for ( int i = 0 ; i < indexColumnNames.length ; i++ ) {
+				if ( indexColumnIsSettable[i] ) {
+					update.addColumn( indexColumnNames[i], "null" );
+				}
+			}
 		}
 
 		if ( getFactory().getSessionFactoryOptions().isCommentsEnabled() ) {
@@ -191,7 +207,7 @@ public class OneToManyPersister extends AbstractCollectionPersister {
 			boolean resetIndex,
 			SharedSessionContractImplementor session) {
 		// If one-to-many and inverse, still need to create the index.  See HHH-5732.
-		if ( isInverse && hasIndex && !indexContainsFormula ) {
+		if ( isInverse && hasIndex && !indexContainsFormula && ArrayHelper.countTrue( indexColumnIsSettable ) > 0 ) {
 			try {
 				if ( entries.hasNext() ) {
 					int nextIndex = resetIndex ? 0 : getSize( id, session );

@@ -11,14 +11,18 @@ import java.util.Properties;
 
 import org.hibernate.MappingException;
 import org.hibernate.Session;
+import org.hibernate.StatelessSession;
 import org.hibernate.TransientObjectException;
 import org.hibernate.engine.internal.ForeignKeys;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.loader.PropertyPath;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.service.ServiceRegistry;
 import org.hibernate.type.EntityType;
 import org.hibernate.type.Type;
+
+import static org.hibernate.internal.CoreLogging.messageLogger;
 
 /**
  * <b>foreign</b><br>
@@ -31,6 +35,8 @@ import org.hibernate.type.Type;
  * @author Gavin King
  */
 public class ForeignGenerator implements IdentifierGenerator, Configurable {
+	private static final CoreMessageLogger LOG = messageLogger( ForeignGenerator.class );
+
 	private String entityName;
 	private String propertyName;
 
@@ -74,9 +80,6 @@ public class ForeignGenerator implements IdentifierGenerator, Configurable {
 
 	@Override
 	public Serializable generate(SharedSessionContractImplementor sessionImplementor, Object object) {
-		// needs to be a Session for the #save and #contains calls below...
-		final Session session = ( Session ) sessionImplementor;
-
 		final EntityPersister persister = sessionImplementor.getFactory().getMetamodel().entityPersister( entityName );
 		Object associatedObject = persister.getPropertyValue( object, propertyName );
 		if ( associatedObject == null ) {
@@ -105,10 +108,26 @@ public class ForeignGenerator implements IdentifierGenerator, Configurable {
 			);
 		}
 		catch (TransientObjectException toe) {
-			id = session.save( foreignValueSourceType.getAssociatedEntityName(), associatedObject );
+			if ( LOG.isDebugEnabled() ) {
+				LOG.debugf(
+						"ForeignGenerator detected a transient entity [%s]",
+						foreignValueSourceType.getAssociatedEntityName()
+				);
+			}
+			if (sessionImplementor instanceof Session) {
+				id = ((Session) sessionImplementor)
+						.save(foreignValueSourceType.getAssociatedEntityName(), associatedObject);
+			}
+			else if (sessionImplementor instanceof StatelessSession) {
+				id = ((StatelessSession) sessionImplementor)
+						.insert(foreignValueSourceType.getAssociatedEntityName(), associatedObject);
+			}
+			else {
+				throw new IdentifierGenerationException("sessionImplementor is neither Session nor StatelessSession");
+			}
 		}
 
-		if ( session.contains( entityName, object ) ) {
+		if ( sessionImplementor instanceof Session && ((Session) sessionImplementor).contains( entityName, object ) ) {
 			//abort the save (the object is already saved by a circular cascade)
 			return IdentifierGeneratorHelper.SHORT_CIRCUIT_INDICATOR;
 			//throw new IdentifierGenerationException("save associated object first, or disable cascade for inverse association");

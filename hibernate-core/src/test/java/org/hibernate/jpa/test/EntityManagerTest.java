@@ -58,6 +58,7 @@ public class EntityManagerTest extends BaseEntityManagerFunctionalTestCase {
 	@SuppressWarnings( {"unchecked"})
 	protected void addConfigOptions(Map options) {
 		options.put( Environment.GENERATE_STATISTICS, "true" );
+		options.put( Environment.JPA_CLOSED_COMPLIANCE, "true" );
 	}
 
 	@Override
@@ -376,6 +377,33 @@ public class EntityManagerTest extends BaseEntityManagerFunctionalTestCase {
 		em.close();
 	}
 
+	@Test
+	public void testSetAndGetUnserializableProperty() throws Exception {
+		EntityManager em = getOrCreateEntityManager();
+		try {
+			MyObject object = new MyObject();
+			object.value = 5;
+			em.setProperty( "MyObject", object );
+			assertFalse( em.getProperties().keySet().contains( "MyObject" ) );
+		}
+		finally {
+			em.close();
+		}
+	}
+
+	@Test
+	public void testSetAndGetSerializedProperty() throws Exception {
+		EntityManager em = getOrCreateEntityManager();
+		try {
+			em.setProperty( "MyObject", "Test123" );
+			assertTrue( em.getProperties().keySet().contains( "MyObject" ) );
+			assertEquals( "Test123", em.getProperties().get( "MyObject" ) );
+		}
+		finally {
+			em.close();
+		}
+	}
+
     @Test
     public void testPersistExisting() throws Exception {
         EntityManager em = getOrCreateEntityManager();
@@ -460,4 +488,7 @@ public class EntityManagerTest extends BaseEntityManagerFunctionalTestCase {
 		}
 	}
 
+	private static class MyObject {
+		public int value;
+	}
 }

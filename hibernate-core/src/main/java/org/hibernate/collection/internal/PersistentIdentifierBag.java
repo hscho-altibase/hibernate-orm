@@ -18,6 +18,7 @@ import java.util.ListIterator;
 import java.util.Map;
 
 import org.hibernate.HibernateException;
+import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.loader.CollectionAliases;
 import org.hibernate.persister.collection.CollectionPersister;
@@ -39,6 +40,9 @@ public class PersistentIdentifierBag extends AbstractPersistentCollection implem
 	protected List<Object> values;
 	protected Map<Integer, Object> identifiers;
 
+	// The Collection provided to a PersistentIdentifierBag constructor,
+	private Collection providedValues;
+
 	/**
 	 * Constructs a PersistentIdentifierBag.  This form needed for SOAP libraries, etc
 	 */
@@ -59,23 +63,44 @@ public class PersistentIdentifierBag extends AbstractPersistentCollection implem
 	 * Constructs a PersistentIdentifierBag.
 	 *
 	 * @param session The session
+	 * @deprecated {@link #PersistentIdentifierBag(SharedSessionContractImplementor)} should be used instead.
+	 */
+	@Deprecated
+	public PersistentIdentifierBag(SessionImplementor session) {
+		this( (SharedSessionContractImplementor) session );
+	}
+
+	/**
+	 * Constructs a PersistentIdentifierBag.
+	 *
+	 * @param session The session
 	 * @param coll The base elements
 	 */
 	@SuppressWarnings("unchecked")
 	public PersistentIdentifierBag(SharedSessionContractImplementor session, Collection coll) {
 		super( session );
+		providedValues = coll;
 		if (coll instanceof List) {
 			values = (List<Object>) coll;
 		}
 		else {
-			values = new ArrayList<>();
-			for ( Object element : coll ) {
-				values.add( element );
-			}
+			values = new ArrayList<>( coll );
 		}
 		setInitialized();
 		setDirectlyAccessible( true );
 		identifiers = new HashMap<>();
+	}
+
+	/**
+	 * Constructs a PersistentIdentifierBag.
+	 *
+	 * @param session The session
+	 * @param coll The base elements
+	 * @deprecated {@link #PersistentIdentifierBag(SharedSessionContractImplementor, Collection)} should be used instead.
+	 */
+	@Deprecated
+	public PersistentIdentifierBag(SessionImplementor session, Collection coll) {
+		this( (SharedSessionContractImplementor) session, coll );
 	}
 
 	@Override
@@ -100,7 +125,12 @@ public class PersistentIdentifierBag extends AbstractPersistentCollection implem
 
 	@Override
 	public boolean isWrapper(Object collection) {
-		return values==collection;
+		return values == collection;
+	}
+
+	@Override
+	public boolean isDirectlyProvidedCollection(Object collection) {
+		return isDirectlyAccessible() && providedValues == collection;
 	}
 
 	@Override
@@ -150,6 +180,7 @@ public class PersistentIdentifierBag extends AbstractPersistentCollection implem
 		if ( index >= 0 ) {
 			beforeRemove( index );
 			values.remove( index );
+			elementRemoved = true;
 			dirty();
 			return true;
 		}

@@ -13,32 +13,35 @@ import org.hibernate.persister.entity.EntityPersister;
 
 /**
  * A BeforeTransactionCompletionProcess impl to verify and increment an entity version as party
- * of beforeQuery-transaction-completion processing
+ * of before-transaction-completion processing
  *
  * @author Scott Marlow
  */
 public class EntityIncrementVersionProcess implements BeforeTransactionCompletionProcess {
 	private final Object object;
-	private final EntityEntry entry;
 
 	/**
 	 * Constructs an EntityIncrementVersionProcess for the given entity.
 	 *
 	 * @param object The entity instance
-	 * @param entry The entity's EntityEntry reference
 	 */
-	public EntityIncrementVersionProcess(Object object, EntityEntry entry) {
+	public EntityIncrementVersionProcess(Object object) {
 		this.object = object;
-		this.entry = entry;
 	}
 
 	/**
-	 * Perform whatever processing is encapsulated here beforeQuery completion of the transaction.
+	 * Perform whatever processing is encapsulated here before completion of the transaction.
 	 *
 	 * @param session The session on which the transaction is preparing to complete.
 	 */
 	@Override
 	public void doBeforeTransactionCompletion(SessionImplementor session) {
+		final EntityEntry entry = session.getPersistenceContext().getEntry( object );
+		// Don't increment version for an entity that is not in the PersistenceContext;
+		if ( entry == null ) {
+			return;
+		}
+
 		final EntityPersister persister = entry.getPersister();
 		final Object nextVersion = persister.forceVersionIncrement( entry.getId(), entry.getVersion(), session );
 		entry.forceLocked( object, nextVersion );

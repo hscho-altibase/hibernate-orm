@@ -14,7 +14,6 @@ import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.loader.plan.exec.process.spi.CollectionReferenceInitializer;
-import org.hibernate.loader.plan.exec.process.spi.ResultSetProcessingContext;
 import org.hibernate.loader.plan.exec.spi.CollectionReferenceAliases;
 import org.hibernate.loader.plan.spi.CollectionReference;
 import org.hibernate.loader.plan.spi.Fetch;
@@ -46,7 +45,7 @@ public class CollectionReferenceInitializerImpl implements CollectionReferenceIn
 
 		try {
 			// read the collection key for this reference for the current row.
-			final PersistenceContext persistenceContext = context.getSession().getPersistenceContext();
+			final PersistenceContext persistenceContext = context.getSession().getPersistenceContextInternal();
 			final Serializable collectionRowKey = (Serializable) collectionReference.getCollectionPersister().readKey(
 					resultSet,
 					aliases.getCollectionColumnAliases().getSuffixedKeyAliases(),
@@ -85,6 +84,7 @@ public class CollectionReferenceInitializerImpl implements CollectionReferenceIn
 			}
 			else {
 				final Serializable optionalKey = findCollectionOwnerKey( context );
+
 				if ( optionalKey != null ) {
 					// we did not find a collection element in the result set, so we
 					// ensure that a collection is created with the owner's identifier,
@@ -121,7 +121,7 @@ public class CollectionReferenceInitializerImpl implements CollectionReferenceIn
 			Serializable collectionRowKey,
 			ResultSet resultSet,
 			ResultSetProcessingContextImpl context) {
-		final Object collectionOwner = context.getSession().getPersistenceContext().getCollectionOwner(
+		final Object collectionOwner = context.getSession().getPersistenceContextInternal().getCollectionOwner(
 				collectionRowKey,
 				collectionReference.getCollectionPersister()
 		);
@@ -138,17 +138,17 @@ public class CollectionReferenceInitializerImpl implements CollectionReferenceIn
 	}
 
 	protected Serializable findCollectionOwnerKey(ResultSetProcessingContextImpl context) {
-		ResultSetProcessingContext.EntityReferenceProcessingState ownerState = context.getOwnerProcessingState( (Fetch) collectionReference );
+		Object owner = context.getOwnerProcessingState( (Fetch) collectionReference ).getEntityInstance();
 
-		if(ownerState == null || ownerState.getEntityKey()==null){
-			return null;
-		}
-		return ownerState.getEntityKey().getIdentifier();
+		return collectionReference.getCollectionPersister().getCollectionType().getKeyOfOwner(
+				owner,
+				context.getSession()
+		);
 	}
 
 	@Override
 	public void endLoading(ResultSetProcessingContextImpl context) {
-		context.getSession().getPersistenceContext()
+		context.getSession().getPersistenceContextInternal()
 				.getLoadContexts()
 				.getCollectionLoadContext( context.getResultSet() )
 				.endLoadingCollections( collectionReference.getCollectionPersister() );

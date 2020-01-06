@@ -6,8 +6,11 @@
  */
 package org.hibernate;
 
+import java.io.Closeable;
 import java.io.Serializable;
 import java.sql.Connection;
+
+import org.hibernate.query.NativeQuery;
 
 /**
  * A command-oriented API for performing bulk operations against a database.
@@ -25,7 +28,7 @@ import java.sql.Connection;
  *
  * @author Gavin King
  */
-public interface StatelessSession extends SharedSessionContract, AutoCloseable {
+public interface StatelessSession extends SharedSessionContract, AutoCloseable, Closeable {
 	/**
 	 * Close the stateless session and release the JDBC connection.
 	 */
@@ -169,4 +172,7 @@ public interface StatelessSession extends SharedSessionContract, AutoCloseable {
 	 */
 	@Deprecated
 	Connection connection();
+
+	@Override
+	NativeQuery createSQLQuery(String queryString);
 }

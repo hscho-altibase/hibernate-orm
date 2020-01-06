@@ -18,7 +18,6 @@ import org.hibernate.AnnotationException;
 import org.hibernate.AssertionFailure;
 import org.hibernate.MappingException;
 import org.hibernate.annotations.JoinColumnOrFormula;
-import org.hibernate.annotations.JoinColumnsOrFormulas;
 import org.hibernate.annotations.JoinFormula;
 import org.hibernate.annotations.common.reflection.XClass;
 import org.hibernate.boot.model.naming.EntityNaming;
@@ -144,7 +143,7 @@ public class Ejb3JoinColumn extends Ejb3Column {
 		for (int i = 0; i < anns.length; i++) {
 			JoinColumnOrFormula join = anns[i];
 			JoinFormula formula = join.formula();
-			if (formula.value() != null && !formula.value().equals("")) {
+			if ( formula.value() != null && !formula.value().isEmpty() ) {
 				joinColumns[i] = buildJoinFormula(
 						formula, mappedBy, joins, propertyHolder, propertyName, buildingContext
 				);
@@ -360,7 +359,7 @@ public class Ejb3JoinColumn extends Ejb3Column {
 			}
 
 			final String sqlType;
-			if ( columnDefinition.equals( "" ) ) {
+			if ( columnDefinition.isEmpty() ) {
 				sqlType = null;
 			}
 			else {
@@ -498,10 +497,7 @@ public class Ejb3JoinColumn extends Ejb3Column {
 		boolean mappedBySide = mappedByTableName != null || mappedByPropertyName != null;
 		boolean ownerSide = getPropertyName() != null;
 
-		Boolean isRefColumnQuoted = StringHelper.isQuoted( logicalReferencedColumn );
-		final String unquotedLogicalReferenceColumn = isRefColumnQuoted
-				? StringHelper.unquote( logicalReferencedColumn )
-				: logicalReferencedColumn;
+		boolean isRefColumnQuoted = StringHelper.isQuoted( logicalReferencedColumn );
 
 		if ( mappedBySide ) {
 			// NOTE : While it is completely misleading here to allow for the combination
@@ -703,6 +699,12 @@ public class Ejb3JoinColumn extends Ejb3Column {
 						}
 					}
 			);
+
+			// HHH-11826 magic. See Ejb3Column and the HHH-6005 comments
+			if ( columnIdentifier.getText().contains( "_collection&&element_" ) ) {
+				columnIdentifier = Identifier.toIdentifier( columnIdentifier.getText().replace( "_collection&&element_", "_" ),
+														columnIdentifier.isQuoted() );
+			}
 
 			//one element was quoted so we quote
 			if ( isRefColumnQuoted || StringHelper.isQuoted( logicalTableName ) ) {
@@ -955,7 +957,7 @@ public class Ejb3JoinColumn extends Ejb3Column {
 				currentJoinColumn.setMappedBy( mappedBy );
 				currentJoinColumn.setJoinAnnotation( annJoin, propertyName );
 				currentJoinColumn.setNullable( false ); //I break the spec, but it's for good
-				//done afterQuery the annotation to override it
+				//done after the annotation to override it
 				currentJoinColumn.bind();
 				joinColumns[index] = currentJoinColumn;
 			}

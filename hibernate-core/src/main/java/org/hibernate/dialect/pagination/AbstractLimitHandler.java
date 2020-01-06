@@ -56,7 +56,7 @@ public abstract class AbstractLimitHandler implements LimitHandler {
 	 * Does the <tt>LIMIT</tt> clause come at the start of the
 	 * <tt>SELECT</tt> statement, rather than at the end?
 	 *
-	 * @return true if limit parameters should come beforeQuery other parameters
+	 * @return true if limit parameters should come before other parameters
 	 */
 	public boolean bindLimitParametersFirst() {
 		return false;
@@ -169,6 +169,13 @@ public abstract class AbstractLimitHandler implements LimitHandler {
 	protected final int getMaxOrLimit(RowSelection selection) {
 		final int firstRow = convertToFirstRowValue( LimitHelper.getFirstRow( selection ) );
 		final int lastRow = selection.getMaxRows();
-		return useMaxForLimit() ? lastRow + firstRow : lastRow;
+		final int maxRows = useMaxForLimit() ? lastRow + firstRow : lastRow;
+		// Use Integer.MAX_VALUE on overflow
+		if ( maxRows < 0 ) {
+			return Integer.MAX_VALUE;
+		}
+		else {
+			return maxRows;
+		}
 	}
 }

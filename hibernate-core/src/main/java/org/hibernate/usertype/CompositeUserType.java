@@ -87,7 +87,7 @@ public interface CompositeUserType {
 	 * @throws HibernateException
 	 */
 	boolean equals(Object x, Object y) throws HibernateException;
-	
+
 	/**
 	 * Get a hashcode for the instance, consistent with persistence "equality"
 	 */

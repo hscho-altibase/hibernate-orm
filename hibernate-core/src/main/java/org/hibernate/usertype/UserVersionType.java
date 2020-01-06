@@ -12,7 +12,7 @@ import org.hibernate.engine.spi.SharedSessionContractImplementor;
 
 /**
  * A user type that may be used for a version property
- * 
+ *
  * @author Gavin King
  */
 public interface UserVersionType extends UserType, Comparator {
@@ -34,5 +34,4 @@ public interface UserVersionType extends UserType, Comparator {
 	 * @return an instance of the type
 	 */
 	Object next(Object current, SharedSessionContractImplementor session);
-
 }

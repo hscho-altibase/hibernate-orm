@@ -10,6 +10,7 @@ import java.lang.reflect.Constructor;
 
 import org.hibernate.EntityMode;
 import org.hibernate.HibernateException;
+import org.hibernate.bytecode.enhance.spi.interceptor.EnhancementHelper;
 import org.hibernate.engine.internal.UnsavedValueFactory;
 import org.hibernate.engine.spi.IdentifierValue;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
@@ -168,6 +169,12 @@ public final class PropertyFactory {
 		boolean alwaysDirtyCheck = type.isAssociationType() &&
 				( (AssociationType) type ).isAlwaysDirtyChecked();
 
+		final boolean lazy = ! EnhancementHelper.includeInBaseFetchGroup(
+				property,
+				lazyAvailable,
+				sessionFactory.getSessionFactoryOptions().isEnhancementAsProxyEnabled()
+		);
+
 		switch ( nature ) {
 			case BASIC: {
 				return new EntityBasedBasicAttribute(
@@ -177,7 +184,7 @@ public final class PropertyFactory {
 						property.getName(),
 						type,
 						new BaselineAttributeInformation.Builder()
-								.setLazy( lazyAvailable && property.isLazy() )
+								.setLazy( lazy )
 								.setInsertable( property.isInsertable() )
 								.setUpdateable( property.isUpdateable() )
 								.setValueGenerationStrategy( property.getValueGenerationStrategy() )
@@ -197,7 +204,7 @@ public final class PropertyFactory {
 						property.getName(),
 						(CompositeType) type,
 						new BaselineAttributeInformation.Builder()
-								.setLazy( lazyAvailable && property.isLazy() )
+								.setLazy( lazy )
 								.setInsertable( property.isInsertable() )
 								.setUpdateable( property.isUpdateable() )
 								.setValueGenerationStrategy( property.getValueGenerationStrategy() )
@@ -219,7 +226,7 @@ public final class PropertyFactory {
 						property.getName(),
 						(AssociationType) type,
 						new BaselineAttributeInformation.Builder()
-								.setLazy( lazyAvailable && property.isLazy() )
+								.setLazy( lazy )
 								.setInsertable( property.isInsertable() )
 								.setUpdateable( property.isUpdateable() )
 								.setValueGenerationStrategy( property.getValueGenerationStrategy() )
@@ -239,7 +246,6 @@ public final class PropertyFactory {
 
 	private static NonIdentifierAttributeNature decode(Type type) {
 		if ( type.isAssociationType() ) {
-			AssociationType associationType = (AssociationType) type;
 
 			if ( type.isComponentType() ) {
 				// an any type is both an association and a composite...
@@ -279,7 +285,9 @@ public final class PropertyFactory {
 		return new StandardProperty(
 				property.getName(),
 				type,
-				lazyAvailable && property.isLazy(),
+				// only called for embeddable sub-attributes which are never (yet) lazy
+				//lazyAvailable && property.isLazy(),
+				false,
 				property.isInsertable(),
 				property.isUpdateable(),
 				property.getValueGenerationStrategy(),

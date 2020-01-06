@@ -12,6 +12,7 @@ import org.hibernate.AssertionFailure;
 import org.hibernate.action.spi.AfterTransactionCompletionProcess;
 import org.hibernate.action.spi.BeforeTransactionCompletionProcess;
 import org.hibernate.action.spi.Executable;
+import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.event.service.spi.EventListenerGroup;
 import org.hibernate.event.service.spi.EventListenerRegistry;
@@ -21,6 +22,8 @@ import org.hibernate.internal.util.StringHelper;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.pretty.MessageHelper;
 
+import org.jboss.logging.Logger;
+
 /**
  * Base class for actions relating to insert/update/delete of an entity
  * instance.
@@ -29,6 +32,7 @@ import org.hibernate.pretty.MessageHelper;
  */
 public abstract class EntityAction
 		implements Executable, Serializable, Comparable, AfterTransactionCompletionProcess {
+	private static final Logger LOG = Logger.getLogger(EntityAction.class);
 
 	private final String entityName;
 	private final Serializable id;
@@ -36,6 +40,8 @@ public abstract class EntityAction
 	private transient Object instance;
 	private transient SharedSessionContractImplementor session;
 	private transient EntityPersister persister;
+
+	private transient boolean veto;
 
 	/**
 	 * Instantiate an action.
@@ -53,6 +59,14 @@ public abstract class EntityAction
 		this.persister = persister;
 	}
 
+	public boolean isVeto() {
+		return veto;
+	}
+
+	public void setVeto(boolean veto) {
+		this.veto = veto;
+	}
+
 	@Override
 	public BeforeTransactionCompletionProcess getBeforeTransactionCompletionProcess() {
 		return null;
@@ -68,7 +82,7 @@ public abstract class EntityAction
 	protected abstract boolean hasPostCommitEventListeners();
 
 	protected boolean needsAfterTransactionCompletion() {
-		return persister.hasCache() || hasPostCommitEventListeners();
+		return persister.canWriteToCache() || hasPostCommitEventListeners();
 	}
 
 	/**
@@ -87,7 +101,8 @@ public abstract class EntityAction
 	 */
 	public final Serializable getId() {
 		if ( id instanceof DelayedPostInsertIdentifier ) {
-			final Serializable eeId = session.getPersistenceContext().getEntry( instance ).getId();
+			final EntityEntry entry = session.getPersistenceContextInternal().getEntry( instance );
+			final Serializable eeId = entry == null ? null : entry.getId();
 			return eeId instanceof DelayedPostInsertIdentifier ? null : eeId;
 		}
 		return id;
@@ -156,7 +171,7 @@ public abstract class EntityAction
 	}
 
 	/**
-	 * Reconnect to session afterQuery deserialization...
+	 * Reconnect to session after deserialization...
 	 *
 	 * @param session The session being deserialized
 	 */

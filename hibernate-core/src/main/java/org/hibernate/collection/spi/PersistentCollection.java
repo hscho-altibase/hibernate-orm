@@ -83,7 +83,7 @@ public interface PersistentCollection {
 	 * database state is now synchronized with the memory state.
 	 */
 	void postAction();
-	
+
 	/**
 	 * Return the user-visible collection (or array) instance
 	 *
@@ -92,19 +92,19 @@ public interface PersistentCollection {
 	Object getValue();
 
 	/**
-	 * Called just beforeQuery reading any rows from the JDBC result set
+	 * Called just before reading any rows from the JDBC result set
 	 */
 	void beginRead();
 
 	/**
-	 * Called afterQuery reading all rows from the JDBC result set
+	 * Called after reading all rows from the JDBC result set
 	 *
 	 * @return Whether to end the read.
 	 */
 	boolean endRead();
-	
+
 	/**
-	 * Called afterQuery initializing from cache
+	 * Called after initializing from cache
 	 *
 	 * @return ??
 	 */
@@ -184,18 +184,18 @@ public interface PersistentCollection {
 	 * @return The identifier value
 	 */
 	Object getIdentifier(Object entry, int i);
-	
+
 	/**
 	 * Get the index of the given collection entry
 	 *
 	 * @param entry The collection entry/element
 	 * @param i The assumed index
-	 * @param persister it was more elegant beforeQuery we added this...
+	 * @param persister it was more elegant before we added this...
 	 *
 	 * @return The index value
 	 */
 	Object getIndex(Object entry, int i, CollectionPersister persister);
-	
+
 	/**
 	 * Get the value of the given collection entry.  Generally the given entry parameter value will just be returned.
 	 * Might get a different value for a duplicate entries in a Set.
@@ -205,7 +205,7 @@ public interface PersistentCollection {
 	 * @return The corresponding object that is part of the collection elements.
 	 */
 	Object getElement(Object entry);
-	
+
 	/**
 	 * Get the snapshot value of the given collection entry
 	 *
@@ -217,11 +217,11 @@ public interface PersistentCollection {
 	Object getSnapshotElement(Object entry, int i);
 
 	/**
-	 * Called beforeQuery any elements are read into the collection,
+	 * Called before any elements are read into the collection,
 	 * allowing appropriate initializations to occur.
 	 *
 	 * @param persister The underlying collection persister.
-	 * @param anticipatedSize The anticipated size of the collection afterQuery initialization is complete.
+	 * @param anticipatedSize The anticipated size of the collection after initialization is complete.
 	 */
 	void beforeInitialize(CollectionPersister persister, int anticipatedSize);
 
@@ -243,7 +243,7 @@ public interface PersistentCollection {
 	 * @return {@code true} if the given snapshot is empty
 	 */
 	boolean isSnapshotEmpty(Serializable snapshot);
-	
+
 	/**
 	 * Disassemble the collection to get it ready for the cache
 	 *
@@ -355,7 +355,7 @@ public interface PersistentCollection {
 	 * @return The iterator
 	 */
 	Iterator queuedAdditionIterator();
-	
+
 	/**
 	 * Get the "queued" orphans
 	 *
@@ -364,58 +364,77 @@ public interface PersistentCollection {
 	 * @return The orphaned elements
 	 */
 	Collection getQueuedOrphans(String entityName);
-	
+
 	/**
 	 * Get the current collection key value
 	 *
 	 * @return the current collection key value
 	 */
 	Serializable getKey();
-	
+
 	/**
 	 * Get the current role name
 	 *
 	 * @return the collection role name
 	 */
 	String getRole();
-	
+
 	/**
 	 * Is the collection unreferenced?
 	 *
 	 * @return {@code true} if the collection is no longer referenced by an owner
 	 */
 	boolean isUnreferenced();
-	
+
 	/**
 	 * Is the collection dirty? Note that this is only
-	 * reliable during the flush cycle, afterQuery the
+	 * reliable during the flush cycle, after the
 	 * collection elements are dirty checked against
 	 * the snapshot.
 	 *
 	 * @return {@code true} if the collection is dirty
 	 */
 	boolean isDirty();
-	
+
+	default boolean isElementRemoved(){
+		return false;
+	}
+
 	/**
-	 * Clear the dirty flag, afterQuery flushing changes
+	 * Was {@code collection} provided directly to this PersistentCollection
+	 * (i.e., provided as an argument to a constructor)?
+	 * <p/>
+	 * Implementors that can copy elements out of a directly provided
+	 * collection into the wrapped collection should override this method.
+	 * <p/>
+	 * @param collection The collection
+	 * @return true, if {@code collection} was provided directly to this
+	 * PersistentCollection; false, otherwise.
+	 */
+	default boolean isDirectlyProvidedCollection(Object collection) {
+		return isDirectlyAccessible() && isWrapper( collection );
+	}
+
+	/**
+	 * Clear the dirty flag, after flushing changes
 	 * to the database.
 	 */
 	void clearDirty();
-	
+
 	/**
 	 * Get the snapshot cached by the collection instance
 	 *
 	 * @return The internally stored snapshot state
 	 */
 	Serializable getStoredSnapshot();
-	
+
 	/**
 	 * Mark the collection as dirty
 	 */
 	void dirty();
-	
+
 	/**
-	 * Called beforeQuery inserting rows, to ensure that any surrogate keys
+	 * Called before inserting rows, to ensure that any surrogate keys
 	 * are fully generated
 	 *
 	 * @param persister The collection persister
@@ -423,7 +442,7 @@ public interface PersistentCollection {
 	void preInsert(CollectionPersister persister);
 
 	/**
-	 * Called afterQuery inserting a row, to fetch the natively generated id
+	 * Called after inserting a row, to fetch the natively generated id
 	 *
 	 * @param persister The collection persister
 	 * @param entry The collection element just inserted
@@ -440,5 +459,5 @@ public interface PersistentCollection {
 	 * @return The orphans
 	 */
 	Collection getOrphans(Serializable snapshot, String entityName);
-	
+
 }

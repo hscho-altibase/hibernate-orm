@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.hibernate.HibernateException;
+import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.loader.CollectionAliases;
 import org.hibernate.persister.collection.CollectionPersister;
@@ -55,6 +56,17 @@ public class PersistentMap extends AbstractPersistentCollection implements Map {
 	}
 
 	/**
+	 * Instantiates a lazy map (the underlying map is un-initialized).
+	 *
+	 * @param session The session to which this map will belong.
+	 * @deprecated {@link #PersistentMap(SharedSessionContractImplementor)} should be used instead.
+	 */
+	@Deprecated
+	public PersistentMap(SessionImplementor session) {
+		this( (SharedSessionContractImplementor) session );
+	}
+
+	/**
 	 * Instantiates a non-lazy map (the underlying map is constructed
 	 * from the incoming map reference).
 	 *
@@ -66,6 +78,19 @@ public class PersistentMap extends AbstractPersistentCollection implements Map {
 		this.map = map;
 		setInitialized();
 		setDirectlyAccessible( true );
+	}
+
+	/**
+	 * Instantiates a non-lazy map (the underlying map is constructed
+	 * from the incoming map reference).
+	 *
+	 * @param session The session to which this map will belong.
+	 * @param map The underlying map data.
+	 * @deprecated {@link #PersistentMap(SharedSessionContractImplementor, Map)} should be used instead.
+	 */
+	@Deprecated
+	public PersistentMap(SessionImplementor session, Map map) {
+		this( (SharedSessionContractImplementor) session, map );
 	}
 
 	@Override
@@ -178,6 +203,7 @@ public class PersistentMap extends AbstractPersistentCollection implements Map {
 		if ( isPutQueueEnabled() ) {
 			final Object old = readElementByIndex( key );
 			if ( old != UNKNOWN ) {
+				elementRemoved = true;
 				queueOperation( new Remove( key, old ) );
 				return old;
 			}
@@ -185,6 +211,7 @@ public class PersistentMap extends AbstractPersistentCollection implements Map {
 		// TODO : safe to interpret "map.remove(key) == null" as non-dirty?
 		initialize( true );
 		if ( map.containsKey( key ) ) {
+			elementRemoved = true;
 			dirty();
 		}
 		return map.remove( key );

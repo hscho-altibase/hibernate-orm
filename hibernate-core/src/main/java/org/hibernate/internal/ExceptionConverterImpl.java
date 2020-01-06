@@ -32,6 +32,8 @@ import org.hibernate.dialect.lock.LockingStrategyException;
 import org.hibernate.dialect.lock.OptimisticEntityLockException;
 import org.hibernate.dialect.lock.PessimisticEntityLockException;
 import org.hibernate.engine.spi.ExceptionConverter;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.exception.LockAcquisitionException;
 import org.hibernate.loader.MultipleBagFetchException;
 
 /**
@@ -40,17 +42,24 @@ import org.hibernate.loader.MultipleBagFetchException;
 public class ExceptionConverterImpl implements ExceptionConverter {
 	private static final EntityManagerMessageLogger log = HEMLogging.messageLogger( ExceptionConverterImpl.class );
 
-	private final AbstractSharedSessionContract sharedSessionContract;
+	private final SharedSessionContractImplementor sharedSessionContract;
+	private final boolean isJpaBootstrap;
+	private final boolean nativeExceptionHandling51Compliance;
 
-	public ExceptionConverterImpl(AbstractSharedSessionContract sharedSessionContract) {
+	public ExceptionConverterImpl(SharedSessionContractImplementor sharedSessionContract) {
 		this.sharedSessionContract = sharedSessionContract;
+		isJpaBootstrap = sharedSessionContract.getFactory().getSessionFactoryOptions().isJpaBootstrap();
+		nativeExceptionHandling51Compliance = sharedSessionContract.getFactory().getSessionFactoryOptions().nativeExceptionHandling51Compliance();
 	}
 
 	@Override
 	public RuntimeException convertCommitException(RuntimeException e) {
-		if ( sharedSessionContract.getFactory().getSessionFactoryOptions().isJpaBootstrap() ) {
+		if ( isJpaBootstrap ) {
 			Throwable wrappedException;
-			if ( e instanceof PersistenceException ) {
+			if ( e instanceof HibernateException ) {
+				wrappedException = convert( (HibernateException) e );
+			}
+			else if ( e instanceof PersistenceException ) {
 				Throwable cause = e.getCause() == null ? e : e.getCause();
 				if ( cause instanceof HibernateException ) {
 					wrappedException = convert( (HibernateException) cause );
@@ -58,9 +67,6 @@ public class ExceptionConverterImpl implements ExceptionConverter {
 				else {
 					wrappedException = cause;
 				}
-			}
-			else if ( e instanceof HibernateException ) {
-				wrappedException = convert( (HibernateException) e );
 			}
 			else {
 				wrappedException = e;
@@ -81,72 +87,92 @@ public class ExceptionConverterImpl implements ExceptionConverter {
 
 	@Override
 	public RuntimeException convert(HibernateException e, LockOptions lockOptions) {
-		Throwable cause = e;
-		if ( cause instanceof StaleStateException ) {
-			final PersistenceException converted = wrapStaleStateException( (StaleStateException) cause );
-			handlePersistenceException( converted );
-			return converted;
-		}
-		else if ( cause instanceof LockingStrategyException ) {
-			final PersistenceException converted = wrapLockException( (HibernateException) cause, lockOptions );
-			handlePersistenceException( converted );
-			return converted;
-		}
-		else if ( cause instanceof org.hibernate.exception.LockTimeoutException ) {
-			final PersistenceException converted = wrapLockException( (HibernateException) cause, lockOptions );
-			handlePersistenceException( converted );
-			return converted;
-		}
-		else if ( cause instanceof org.hibernate.PessimisticLockException ) {
-			final PersistenceException converted = wrapLockException( (HibernateException) cause, lockOptions );
-			handlePersistenceException( converted );
-			return converted;
-		}
-		else if ( cause instanceof org.hibernate.QueryTimeoutException ) {
-			final QueryTimeoutException converted = new QueryTimeoutException( cause.getMessage(), cause );
-			handlePersistenceException( converted );
-			return converted;
-		}
-		else if ( cause instanceof ObjectNotFoundException ) {
-			final EntityNotFoundException converted = new EntityNotFoundException( cause.getMessage() );
-			handlePersistenceException( converted );
-			return converted;
-		}
-		else if ( cause instanceof org.hibernate.NonUniqueObjectException ) {
-			final EntityExistsException converted = new EntityExistsException( cause.getMessage() );
-			handlePersistenceException( converted );
-			return converted;
-		}
-		else if ( cause instanceof org.hibernate.NonUniqueResultException ) {
-			final NonUniqueResultException converted = new NonUniqueResultException( cause.getMessage() );
-			handlePersistenceException( converted );
-			return converted;
-		}
-		else if ( cause instanceof UnresolvableObjectException ) {
-			final EntityNotFoundException converted = new EntityNotFoundException( cause.getMessage() );
-			handlePersistenceException( converted );
-			return converted;
-		}
-		else if ( cause instanceof QueryException ) {
-			return new IllegalArgumentException( cause );
-		}
-		else if ( cause instanceof MultipleBagFetchException ) {
-			return new IllegalArgumentException( cause );
-		}
-		else if ( cause instanceof TransientObjectException ) {
-			try {
-				sharedSessionContract.markForRollbackOnly();
+		if ( !nativeExceptionHandling51Compliance ) {
+			Throwable cause = e;
+			if ( cause instanceof StaleStateException ) {
+				final PersistenceException converted = wrapStaleStateException( (StaleStateException) cause );
+				handlePersistenceException( converted );
+				return converted;
 			}
-			catch (Exception ne) {
-				//we do not want the subsequent exception to swallow the original one
-				log.unableToMarkForRollbackOnTransientObjectException( ne );
+			else if ( cause instanceof LockAcquisitionException ) {
+				final PersistenceException converted = wrapLockException( (HibernateException) cause, lockOptions );
+				handlePersistenceException( converted );
+				return converted;
 			}
-			return new IllegalStateException( e ); //Spec 3.2.3 Synchronization rules
+			else if ( cause instanceof LockingStrategyException ) {
+				final PersistenceException converted = wrapLockException( (HibernateException) cause, lockOptions );
+				handlePersistenceException( converted );
+				return converted;
+			}
+			else if ( cause instanceof org.hibernate.PessimisticLockException ) {
+				final PersistenceException converted = wrapLockException( (HibernateException) cause, lockOptions );
+				handlePersistenceException( converted );
+				return converted;
+			}
+			else if ( cause instanceof org.hibernate.QueryTimeoutException ) {
+				final QueryTimeoutException converted = new QueryTimeoutException( cause.getMessage(), cause );
+				handlePersistenceException( converted );
+				return converted;
+			}
+			else if ( cause instanceof ObjectNotFoundException ) {
+				final EntityNotFoundException converted = new EntityNotFoundException( cause.getMessage() );
+				handlePersistenceException( converted );
+				return converted;
+			}
+			else if ( cause instanceof org.hibernate.NonUniqueObjectException ) {
+				final EntityExistsException converted = new EntityExistsException( cause.getMessage() );
+				handlePersistenceException( converted );
+				return converted;
+			}
+			else if ( cause instanceof org.hibernate.NonUniqueResultException ) {
+				final NonUniqueResultException converted = new NonUniqueResultException( cause.getMessage() );
+				handlePersistenceException( converted );
+				return converted;
+			}
+			else if ( cause instanceof UnresolvableObjectException ) {
+				final EntityNotFoundException converted = new EntityNotFoundException( cause.getMessage() );
+				handlePersistenceException( converted );
+				return converted;
+			}
+			else if ( cause instanceof QueryException ) {
+				return new IllegalArgumentException( cause );
+			}
+			else if ( cause instanceof MultipleBagFetchException ) {
+				return new IllegalArgumentException( cause );
+			}
+			else if ( cause instanceof TransientObjectException ) {
+				try {
+					sharedSessionContract.markForRollbackOnly();
+				}
+				catch (Exception ne) {
+					//we do not want the subsequent exception to swallow the original one
+					log.unableToMarkForRollbackOnTransientObjectException( ne );
+				}
+				return new IllegalStateException( e ); //Spec 3.2.3 Synchronization rules
+			}
+			else {
+				final PersistenceException converted = new PersistenceException( cause );
+				handlePersistenceException( converted );
+				return converted;
+			}
 		}
 		else {
-			final PersistenceException converted = new PersistenceException( cause );
-			handlePersistenceException( converted );
-			return converted;
+			if ( e instanceof QueryException ) {
+				return e;
+			}
+			else if ( e instanceof MultipleBagFetchException ) {
+				return e;
+			}
+			else {
+				try {
+					sharedSessionContract.markForRollbackOnly();
+				}
+				catch (Exception ne) {
+					//we do not want the subsequent exception to swallow the original one
+					log.unableToMarkForRollbackOnTransientObjectException( ne );
+				}
+				return e;
+			}
 		}
 	}
 

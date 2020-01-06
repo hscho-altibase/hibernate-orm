@@ -8,7 +8,9 @@ package org.hibernate.jpa.boot.spi;
 
 import java.util.Map;
 
-import org.hibernate.jpa.AvailableSettings;
+import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.internal.EntityManagerMessageLogger;
+import org.hibernate.internal.HEMLogging;
 import org.hibernate.jpa.HibernatePersistenceProvider;
 
 import org.jboss.logging.Logger;
@@ -20,12 +22,8 @@ import org.jboss.logging.Logger;
  * @author Steve Ebersole
  */
 public final class ProviderChecker {
-	private static final Logger log = Logger.getLogger( ProviderChecker.class );
 
-	@SuppressWarnings("deprecation")
-	private static String[] HIBERNATE_PROVIDER_NAMES = new String[] {
-			HibernatePersistenceProvider.class.getName()
-	};
+	private static final Logger log = Logger.getLogger( ProviderChecker.class );
 
 	/**
 	 * Does the descriptor and/or integration request Hibernate as the
@@ -54,20 +52,21 @@ public final class ProviderChecker {
 				"Checking requested PersistenceProvider name [%s] against Hibernate provider names",
 				requestedProviderName
 		);
-
-		for ( String hibernateProviderName : HIBERNATE_PROVIDER_NAMES ) {
-			if ( requestedProviderName.equals( hibernateProviderName ) ) {
-				return true;
-			}
+		final String deprecatedPersistenceProvider = "org.hibernate.ejb.HibernatePersistence";
+		if ( deprecatedPersistenceProvider.equals( requestedProviderName) ) {
+			HEMLogging.messageLogger( ProviderChecker.class )
+					.deprecatedPersistenceProvider(
+					deprecatedPersistenceProvider,
+					HibernatePersistenceProvider.class.getName()
+			);
+			return true;
 		}
-
-		log.tracef( "Found no match against Hibernate provider names" );
-		return false;
+		return HibernatePersistenceProvider.class.getName().equals( requestedProviderName );
 	}
 
 	/**
 	 * Extract the requested persistence provider name using the algorithm Hibernate uses.  Namely, a provider named
-	 * in the 'integration' map (under the key '{@value AvailableSettings#PROVIDER}') is preferred, as per-spec, over
+	 * in the 'integration' map (under the key '{@value AvailableSettings#JPA_PERSISTENCE_PROVIDER}') is preferred, as per-spec, over
 	 * value specified in persistence unit.
 	 *
 	 * @param persistenceUnit The {@code <persistence-unit/>} descriptor.
@@ -101,7 +100,7 @@ public final class ProviderChecker {
 		if ( integration == null ) {
 			return null;
 		}
-		final String setting = (String) integration.get( AvailableSettings.PROVIDER );
+		final String setting = (String) integration.get( AvailableSettings.JPA_PERSISTENCE_PROVIDER );
 		return setting == null ? null : setting.trim();
 	}
 

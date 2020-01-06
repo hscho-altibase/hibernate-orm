@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+
 import javax.persistence.EntityManager;
 import javax.persistence.SharedCacheMode;
 import javax.persistence.ValidationMode;
@@ -21,20 +22,16 @@ import javax.persistence.spi.PersistenceUnitTransactionType;
 
 import org.hibernate.boot.registry.internal.StandardServiceRegistryImpl;
 import org.hibernate.bytecode.enhance.spi.EnhancementContext;
+import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.Environment;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.internal.util.StringHelper;
-import org.hibernate.jpa.AvailableSettings;
 import org.hibernate.jpa.HibernatePersistenceProvider;
 import org.hibernate.jpa.boot.spi.Bootstrap;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
-
 import org.hibernate.testing.junit4.BaseUnitTestCase;
 import org.junit.After;
 import org.junit.Before;
-
-import org.jboss.logging.Logger;
 
 /**
  * A base class for all ejb tests.
@@ -43,7 +40,6 @@ import org.jboss.logging.Logger;
  * @author Hardy Ferentschik
  */
 public abstract class BaseEntityManagerFunctionalTestCase extends BaseUnitTestCase {
-	private static final Logger log = Logger.getLogger( BaseEntityManagerFunctionalTestCase.class );
 
 	// IMPL NOTE : Here we use @Before and @After (instead of @BeforeClassOnce and @AfterClassOnce like we do in
 	// BaseCoreFunctionalTestCase) because the old HEM test methodology was to create an EMF for each test method.
@@ -70,7 +66,7 @@ public abstract class BaseEntityManagerFunctionalTestCase extends BaseUnitTestCa
 
 	@Before
 	@SuppressWarnings( {"UnusedDeclaration"})
-	public void buildEntityManagerFactory() throws Exception {
+	public void buildEntityManagerFactory() {
 		log.trace( "Building EntityManagerFactory" );
 
 		entityManagerFactory =  Bootstrap.getEntityManagerFactoryBuilder(
@@ -197,7 +193,7 @@ public abstract class BaseEntityManagerFunctionalTestCase extends BaseUnitTestCa
 	protected void addMappings(Map settings) {
 		String[] mappings = getMappings();
 		if ( mappings != null ) {
-			settings.put( AvailableSettings.HBXML_FILES, StringHelper.join( ",", mappings ) );
+			settings.put( AvailableSettings.HBXML_FILES, String.join( ",", mappings ) );
 		}
 	}
 
@@ -210,6 +206,8 @@ public abstract class BaseEntityManagerFunctionalTestCase extends BaseUnitTestCa
 	protected Map getConfig() {
 		Map<Object, Object> config = Environment.getProperties();
 		ArrayList<Class> classes = new ArrayList<Class>();
+
+		config.put( AvailableSettings.CLASSLOADERS, getClass().getClassLoader() );
 
 		classes.addAll( Arrays.asList( getAnnotatedClasses() ) );
 		config.put( AvailableSettings.LOADED_CLASSES, classes );
@@ -293,7 +291,7 @@ public abstract class BaseEntityManagerFunctionalTestCase extends BaseUnitTestCa
             log.warn("You left an open transaction! Fix your test case. For now, we are closing it for you.");
 		}
 		if ( em.isOpen() ) {
-			// as we open an EM beforeQuery the test runs, it will still be open if the test uses a custom EM.
+			// as we open an EM before the test runs, it will still be open if the test uses a custom EM.
 			// or, the person may have forgotten to close. So, do not raise a "fail", but log the fact.
 			em.close();
             log.warn("The EntityManager is not closed. Closing it.");

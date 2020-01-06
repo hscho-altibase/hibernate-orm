@@ -9,14 +9,17 @@ package org.hibernate.loader.entity;
 import java.io.Serializable;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collections;
 import java.util.List;
 
 import org.hibernate.HibernateException;
 import org.hibernate.LockOptions;
 import org.hibernate.engine.spi.LoadQueryInfluencers;
+import org.hibernate.engine.spi.QueryParameters;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.loader.OuterJoinLoader;
+import org.hibernate.param.ParameterBinder;
 import org.hibernate.persister.entity.OuterJoinLoadable;
 import org.hibernate.transform.ResultTransformer;
 import org.hibernate.type.Type;
@@ -96,8 +99,8 @@ public abstract class AbstractEntityLoader
 			Object[] row,
 			ResultTransformer transformer,
 			ResultSet rs,
-			SharedSessionContractImplementor session) throws SQLException, HibernateException {
-		return row[row.length-1];
+			SharedSessionContractImplementor session) {
+		return row[ row.length - 1 ];
 	}
 
 	@Override

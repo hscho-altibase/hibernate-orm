@@ -138,11 +138,9 @@ public class SessionFactoryHelper {
 	 */
 	public EntityPersister findEntityPersisterByName(String name) throws MappingException {
 		// First, try to get the persister using the given name directly.
-		try {
-			return sfi.getMetamodel().entityPersister( name );
-		}
-		catch ( MappingException ignore ) {
-			// unable to locate it using this name
+		EntityPersister persister = sfi.getMetamodel().entityPersisters().get( name );
+		if ( persister != null ) {
+			return persister;
 		}
 
 		// If that didn't work, try using the 'import' name.
@@ -267,6 +265,24 @@ public class SessionFactoryHelper {
 	 * @return The generated join sequence.
 	 */
 	public JoinSequence createJoinSequence(boolean implicit, AssociationType associationType, String tableAlias, JoinType joinType, String[] columns) {
+		JoinSequence joinSequence = createJoinSequence();
+		joinSequence.setUseThetaStyle( implicit );    // Implicit joins use theta style (WHERE pk = fk), explicit joins use JOIN (after from)
+		joinSequence.addJoin( associationType, tableAlias, joinType, columns );
+		return joinSequence;
+	}
+
+	/**
+	 * Generate a join sequence representing the given association type.
+	 *
+	 * @param implicit Should implicit joins (theta-style) or explicit joins (ANSI-style) be rendered
+	 * @param associationType The type representing the thing to be joined into.
+	 * @param tableAlias The table alias to use in qualifying the join conditions
+	 * @param joinType The type of join to render (inner, outer, etc);  see {@link org.hibernate.sql.JoinFragment}
+	 * @param columns The columns making up the condition of the join.
+	 *
+	 * @return The generated join sequence.
+	 */
+	public JoinSequence createJoinSequence(boolean implicit, AssociationType associationType, String tableAlias, JoinType joinType, String[][] columns) {
 		JoinSequence joinSequence = createJoinSequence();
 		joinSequence.setUseThetaStyle( implicit );    // Implicit joins use theta style (WHERE pk = fk), explicit joins use JOIN (afterQuery from)
 		joinSequence.addJoin( associationType, tableAlias, joinType, columns );
@@ -419,6 +435,6 @@ public class SessionFactoryHelper {
 	}
 
 	public boolean isStrictJPAQLComplianceEnabled() {
-		return sfi.getSessionFactoryOptions().isStrictJpaQueryLanguageCompliance();
+		return sfi.getSessionFactoryOptions().getJpaCompliance().isJpaQueryComplianceEnabled();
 	}
 }

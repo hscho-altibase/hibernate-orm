@@ -6,7 +6,6 @@
  */
 package org.hibernate.test.cache;
 
-import java.util.Properties;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 
@@ -15,12 +14,6 @@ import org.hibernate.annotations.Cache;
 import org.hibernate.annotations.CacheConcurrencyStrategy;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
-import org.hibernate.boot.spi.SessionFactoryOptions;
-import org.hibernate.cache.CacheException;
-import org.hibernate.cache.internal.DefaultCacheKeysFactory;
-import org.hibernate.cache.internal.SimpleCacheKeysFactory;
-import org.hibernate.cache.spi.CacheDataDescription;
-import org.hibernate.cache.spi.EntityRegion;
 import org.hibernate.cfg.AvailableSettings;
 
 import org.hibernate.testing.cache.CachingRegionFactory;
@@ -41,10 +34,10 @@ public class SharedRegionTest extends BaseNonConfigCoreFunctionalTestCase {
 	}
 
 	@Override
-	protected void applyMetadataSources(MetadataSources metadataSources) {
-		super.applyMetadataSources( metadataSources );
-		metadataSources.addAnnotatedClass( StateCodes.class );
-		metadataSources.addAnnotatedClass( ZipCodes.class );
+	protected void applyMetadataSources(MetadataSources sources) {
+		super.applyMetadataSources( sources );
+		sources.addAnnotatedClass( StateCodes.class );
+		sources.addAnnotatedClass( ZipCodes.class );
 	}
 
 	@Test

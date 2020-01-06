@@ -32,8 +32,6 @@ import static org.hibernate.testing.transaction.TransactionUtil.doInJPA;
  */
 public class UnidirectionalSortedSetTest extends BaseEntityManagerFunctionalTestCase {
 
-	private static final Logger log = Logger.getLogger( UnidirectionalSortedSetTest.class );
-
 	@Override
 	protected Class<?>[] getAnnotatedClasses() {
 		return new Class<?>[] {
@@ -71,9 +69,14 @@ public class UnidirectionalSortedSetTest extends BaseEntityManagerFunctionalTest
 
 		@Id
 		private Long id;
+
 		@OneToMany(cascade = CascadeType.ALL)
 		@SortNatural
 		private SortedSet<Phone> phones = new TreeSet<>();
+
+		//Getters and setters are omitted for brevity
+
+	//end::collections-unidirectional-sorted-set-natural-comparator-example[]
 
 		public Person() {
 		}
@@ -85,6 +88,7 @@ public class UnidirectionalSortedSetTest extends BaseEntityManagerFunctionalTest
 		public Set<Phone> getPhones() {
 			return phones;
 		}
+	//tag::collections-unidirectional-sorted-set-natural-comparator-example[]
 	}
 
 	@Entity(name = "Phone")
@@ -98,6 +102,10 @@ public class UnidirectionalSortedSetTest extends BaseEntityManagerFunctionalTest
 		@NaturalId
 		@Column(name = "`number`")
 		private String number;
+
+		//Getters and setters are omitted for brevity
+
+	//end::collections-unidirectional-sorted-set-natural-comparator-example[]
 
 		public Phone() {
 		}
@@ -120,6 +128,7 @@ public class UnidirectionalSortedSetTest extends BaseEntityManagerFunctionalTest
 			return number;
 		}
 
+	//tag::collections-unidirectional-sorted-set-natural-comparator-example[]
 		@Override
 		public int compareTo(Phone o) {
 			return number.compareTo( o.getNumber() );

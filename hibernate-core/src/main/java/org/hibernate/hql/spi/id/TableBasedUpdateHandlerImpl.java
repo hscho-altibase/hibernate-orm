@@ -20,7 +20,6 @@ import org.hibernate.hql.internal.ast.HqlSqlWalker;
 import org.hibernate.hql.internal.ast.tree.AssignmentSpecification;
 import org.hibernate.hql.internal.ast.tree.FromElement;
 import org.hibernate.hql.internal.ast.tree.UpdateStatement;
-import org.hibernate.internal.util.StringHelper;
 import org.hibernate.param.ParameterSpecification;
 import org.hibernate.persister.entity.Queryable;
 import org.hibernate.sql.Update;
@@ -75,7 +74,7 @@ public class TableBasedUpdateHandlerImpl
 			final List<ParameterSpecification> parameterList = new ArrayList<>();
 			final Update update = new Update( dialect )
 					.setTableName( tableNames[tableIndex] )
-					.setWhere( "(" + StringHelper.join( ", ", columnNames[tableIndex] ) + ") IN (" + idSubselect + ")" );
+					.setWhere( "(" + String.join( ", ", columnNames[tableIndex] ) + ") IN (" + idSubselect + ")" );
 			if ( factory().getSessionFactoryOptions().isCommentsEnabled() ) {
 				update.setComment( "bulk update" );
 			}
@@ -116,10 +115,10 @@ public class TableBasedUpdateHandlerImpl
 			try {
 				try {
 					ps = session.getJdbcCoordinator().getStatementPreparer().prepareStatement( idInsertSelect, false );
-					int sum = 1;
-					sum += handlePrependedParametersOnIdSelection( ps, session, sum );
+					int position = 1;
+					position += handlePrependedParametersOnIdSelection( ps, session, position );
 					for ( ParameterSpecification parameterSpecification : idSelectParameterSpecifications ) {
-						sum += parameterSpecification.bind( ps, queryParameters, session, sum );
+						position += parameterSpecification.bind( ps, queryParameters, session, position );
 					}
 					resultCount = session.getJdbcCoordinator().getResultSetReturn().executeUpdate( ps );
 				}
@@ -144,8 +143,9 @@ public class TableBasedUpdateHandlerImpl
 						ps = session.getJdbcCoordinator().getStatementPreparer().prepareStatement( updates[i], false );
 						if ( assignmentParameterSpecifications[i] != null ) {
 							int position = 1; // jdbc params are 1-based
-							for ( int x = 0; x < assignmentParameterSpecifications[i].length; x++ ) {
-								position += assignmentParameterSpecifications[i][x].bind( ps, queryParameters, session, position );
+							for ( ParameterSpecification assignmentParameterSpecification : assignmentParameterSpecifications[i] ) {
+								position += assignmentParameterSpecification
+										.bind( ps, queryParameters, session, position );
 							}
 							handleAddedParametersOnUpdate( ps, session, position );
 						}

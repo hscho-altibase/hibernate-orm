@@ -6,6 +6,11 @@
  */
 package org.hibernate.testing.junit4;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import javax.transaction.SystemException;
 
 import org.hibernate.engine.transaction.internal.jta.JtaStatusHelper;
@@ -28,15 +33,18 @@ import org.jboss.logging.Logger;
  */
 @RunWith( CustomRunner.class )
 public abstract class BaseUnitTestCase {
-	private static final Logger log = Logger.getLogger( BaseUnitTestCase.class );
+
+	protected final Logger log = Logger.getLogger( getClass() );
 
 	private static boolean enableConnectionLeakDetection = Boolean.TRUE.toString()
 			.equals( System.getenv( "HIBERNATE_CONNECTION_LEAK_DETECTION" ) );
 
 	private ConnectionLeakUtil connectionLeakUtil;
 
+	protected final ExecutorService executorService = Executors.newSingleThreadExecutor();
+
 	@Rule
-	public TestRule globalTimeout = new Timeout( 30 * 60 * 1000 ); // no test should run longer than 30 minutes
+	public TestRule globalTimeout = Timeout.millis( TimeUnit.MINUTES.toMillis( 30 ) ); // no test should run longer than 30 minutes
 
 	public BaseUnitTestCase() {
 		if ( enableConnectionLeakDetection ) {
@@ -47,7 +55,6 @@ public abstract class BaseUnitTestCase {
 	@AfterClassOnce
 	public void assertNoLeaks() {
 		if ( enableConnectionLeakDetection ) {
-			log.info( "Assert no leaks!" );
 			connectionLeakUtil.assertNoLeaks();
 		}
 	}
@@ -61,6 +68,31 @@ public abstract class BaseUnitTestCase {
 			}
 			catch (SystemException ignored) {
 			}
+		}
+	}
+
+	protected void sleep(long millis) {
+		try {
+			Thread.sleep( millis );
+		}
+		catch ( InterruptedException e ) {
+			Thread.interrupted();
+		}
+	}
+
+	protected Future<?> executeAsync(Runnable callable) {
+		return executorService.submit(callable);
+	}
+
+	protected void executeSync(Runnable callable) {
+		try {
+			executeAsync( callable ).get();
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+		catch (ExecutionException e) {
+			throw new RuntimeException( e.getCause() );
 		}
 	}
 }

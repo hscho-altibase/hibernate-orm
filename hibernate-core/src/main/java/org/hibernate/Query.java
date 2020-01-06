@@ -22,6 +22,7 @@ import javax.persistence.Parameter;
 import javax.persistence.TemporalType;
 import javax.persistence.TypedQuery;
 
+import org.hibernate.engine.spi.RowSelection;
 import org.hibernate.query.CommonQueryContract;
 import org.hibernate.query.ParameterMetadata;
 import org.hibernate.query.QueryParameter;
@@ -63,6 +64,106 @@ public interface Query<R> extends TypedQuery<R>, CommonQueryContract {
 	 * @return the query string
 	 */
 	String getQueryString();
+
+	/**
+	 * "QueryOptions" is a better name, I think, than "RowSelection" -> 6.0
+	 *
+	 * @todo 6.0 rename RowSelection to QueryOptions
+	 *
+	 * @return Return the encapsulation of this query's options, which includes access to
+	 * firstRow, maxRows, timeout and fetchSize.   Important because this gives access to
+	 * those values in their Integer form rather than the primitive form (int) required by JPA.
+	 */
+	RowSelection getQueryOptions();
+
+	/**
+	 * The position of the first query result to be retrieved, previously set by
+	 * {@link #setFirstResult(int)} or {@link #setHibernateFirstResult(int)}.
+	 * <p/>
+	 * If the value was not initialized by {@link #setFirstResult(int)} or
+	 * {@link #setHibernateFirstResult(int)}, then {@code null} is returned, resulting
+	 * in pagination starting from position 0.
+	 * <p/>
+	 * If {@link #setHibernateFirstResult(int)} was called with a negative value, then 0
+	 * is returned.
+	 *
+	 * @return the position of the first query result, or {@code null} if uninitialized.
+	 *
+	 * @see #setFirstResult(int)
+	 * @see #setHibernateFirstResult(int)
+	 *
+	 * @deprecated {@link #getFirstResult()} should be used instead.
+	 */
+	@Deprecated
+	default Integer getHibernateFirstResult() {
+		return getQueryOptions().getFirstRow();
+	}
+
+	/**
+	 * Set the position of the first query result to be retrieved. A negative value will
+	 * result in pagination starting from position 0.
+	 *
+	 * @param firstRow - the position of the first query result
+	 * @return {@code this}, for method chaining
+	 *
+	 * @deprecated {@link #setFirstResult(int)} should be used instead.
+	 */
+	@Deprecated
+	default Query setHibernateFirstResult(int firstRow) {
+		if ( firstRow < 0 ) {
+			getQueryOptions().setFirstRow( 0 );
+		}
+		else {
+			getQueryOptions().setFirstRow( firstRow );
+		}
+		return this;
+	}
+
+	/**
+	 * The maximum number of query results to be retrieved, previously set by
+	 * {@link #setMaxResults(int)} or {@link #setHibernateMaxResults(int)}.
+	 * <p/>
+	 * If the value was not initialized by {@link #setMaxResults(int)} or
+	 * {@link #setHibernateMaxResults(int)}, then {@code null} is returned
+	 * <p/>
+	 * If {@link #setHibernateMaxResults(int)} was called with a value less than
+	 * or equal to 0, the value is considered to be uninitialized, and {@code null}
+	 * is returned, resulting in no limit on the number of results.
+	 *
+	 * @return the maximum number of query results, or {@code null} if uninitialized.
+	 *
+	 * @see #setMaxResults(int) (int)
+	 * @see #setHibernateMaxResults(int) (int)
+	 *
+	 * @deprecated {@link #getMaxResults()} should be used instead.
+	 */
+	@Deprecated
+	default Integer getHibernateMaxResults() {
+		return getQueryOptions().getMaxRows();
+	}
+
+	/**
+	 * Set the maximum number of query results to be retrieved. A value less than
+	 * or equal to 0 is considered uninitialized, resulting in no limit on the number
+	 * of results.
+	 *
+	 * @param maxResults - the maximum number of query results
+	 * @return {@code this}, for method chaining
+	 *
+	 * @deprecated {@link #setMaxResults(int)} should be used instead.
+	 */
+	@Deprecated
+	default Query setHibernateMaxResults(int maxResults) {
+		// maxResults <= 0 is the same as uninitialized (with no limit),
+		if ( maxResults <= 0 ) {
+			// treat zero and negatives specifically as meaning no limit...
+			getQueryOptions().setMaxRows( null );
+		}
+		else {
+			getQueryOptions().setMaxRows( maxResults );
+		}
+		return this;
+	}
 
 	/**
 	 * Obtain the FlushMode in effect for this query.  By default, the query inherits the FlushMode of the Session
@@ -245,7 +346,7 @@ public interface Query<R> extends TypedQuery<R>, CommonQueryContract {
 	 * @see org.hibernate.engine.spi.PersistenceContext#isDefaultReadOnly()
 	 *
 	 * The read-only/modifiable setting has no impact on entities/proxies returned by the
-	 * query that existed in the session beforeQuery the query was executed.
+	 * query that existed in the session before the query was executed.
 	 *
 	 * @return {@code true} if the entities and proxies loaded by the query will be put
 	 * in read-only mode; {@code false} otherwise (they will be modifiable)
@@ -272,7 +373,7 @@ public interface Query<R> extends TypedQuery<R>, CommonQueryContract {
 	 * proxy has, regardless of the session's current setting.
 	 *
 	 * The read-only/modifiable setting has no impact on entities/proxies
-	 * returned by the query that existed in the session beforeQuery the query was executed.
+	 * returned by the query that existed in the session before the query was executed.
 	 *
 	 * @return {@code this}, for method chaining
 	 *
@@ -369,7 +470,7 @@ public interface Query<R> extends TypedQuery<R>, CommonQueryContract {
 
 	/**
 	 * Return the query results as an <tt>Iterator</tt>. If the query
-	 * contains multiple results pre row, the results are returned in
+	 * contains multiple results per row, the results are returned in
 	 * an instance of <tt>Object[]</tt>.<br>
 	 * <br>
 	 * Entities returned as results are initialized on demand. The first
@@ -382,7 +483,12 @@ public interface Query<R> extends TypedQuery<R>, CommonQueryContract {
 	/**
 	 * Return the query results as <tt>ScrollableResults</tt>. The
 	 * scrollability of the returned results depends upon JDBC driver
-	 * support for scrollable <tt>ResultSet</tt>s.<br>
+	 * support for scrollable <tt>ResultSet</tt>s.
+	 *
+	 * <p>
+	 *
+	 * You should call {@link ScrollableResults#close()} after processing the <tt>ScrollableResults</tt>
+	 * so that the underlying resources are deallocated right away.
 	 *
 	 * @see ScrollableResults
 	 *
@@ -393,6 +499,11 @@ public interface Query<R> extends TypedQuery<R>, CommonQueryContract {
 	/**
 	 * Return the query results as ScrollableResults. The scrollability of the returned results
 	 * depends upon JDBC driver support for scrollable ResultSets.
+	 *
+	 * <p>
+	 *
+	 * You should call {@link ScrollableResults#close()} after processing the <tt>ScrollableResults</tt>
+	 * so that the underlying resources are deallocated right away.
 	 *
 	 * @param scrollMode The scroll mode
 	 *
@@ -413,10 +524,6 @@ public interface Query<R> extends TypedQuery<R>, CommonQueryContract {
 	 */
 	List<R> list();
 
-	default List<R> getResultList() {
-		return list();
-	}
-
 	/**
 	 * Convenience method to return a single instance that matches
 	 * the query, or {@code null} if the query returns no results.
@@ -426,10 +533,6 @@ public interface Query<R> extends TypedQuery<R>, CommonQueryContract {
 	 * @throws NonUniqueResultException if there is more than one matching result
 	 */
 	R uniqueResult();
-
-	default R getSingleResult() {
-		return uniqueResult();
-	}
 
 	/**
 	 * Access to information about query parameters.
@@ -601,6 +704,7 @@ public interface Query<R> extends TypedQuery<R>, CommonQueryContract {
 	 * @return {@code this}, for method chaining
 	 */
 	Query<R> setParameterList(String name, Collection values);
+	Query<R> setParameterList(int position, Collection values);
 
 	/**
 	 * Bind multiple values to a named query parameter. This is useful for binding
@@ -613,6 +717,7 @@ public interface Query<R> extends TypedQuery<R>, CommonQueryContract {
 	 * @return {@code this}, for method chaining
 	 */
 	Query<R> setParameterList(String name, Collection values, Type type);
+	Query<R> setParameterList(int position, Collection values, Type type);
 
 	/**
 	 * Bind multiple values to a named query parameter. This is useful for binding
@@ -625,6 +730,7 @@ public interface Query<R> extends TypedQuery<R>, CommonQueryContract {
 	 * @return {@code this}, for method chaining
 	 */
 	Query<R> setParameterList(String name, Object[] values, Type type);
+	Query<R> setParameterList(int position, Object[] values, Type type);
 
 	/**
 	 * Bind multiple values to a named query parameter. The Hibernate type of the parameter is
@@ -638,6 +744,7 @@ public interface Query<R> extends TypedQuery<R>, CommonQueryContract {
 	 * @return {@code this}, for method chaining
 	 */
 	Query<R> setParameterList(String name, Object[] values);
+	Query<R> setParameterList(int position, Object[] values);
 
 	/**
 	 * Bind the property values of the given bean to named parameters of the query,

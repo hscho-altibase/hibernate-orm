@@ -24,9 +24,11 @@ import static org.jboss.logging.Logger.Level.WARN;
 @MessageLogger( projectCode = "HHH" )
 @ValidIdRange( min = 90000001, max = 90001000 )
 public interface DeprecationLogger extends BasicLogger {
-	public static final DeprecationLogger DEPRECATION_LOGGER = Logger.getMessageLogger(
+	String CATEGORY = "org.hibernate.orm.deprecation";
+
+	DeprecationLogger DEPRECATION_LOGGER = Logger.getMessageLogger(
 			DeprecationLogger.class,
-			"org.hibernate.orm.deprecation"
+			CATEGORY
 	);
 
 	/**
@@ -238,4 +240,13 @@ public interface DeprecationLogger extends BasicLogger {
 					"or [hibernate.connection.release_mode]; use [hibernate.connection.handling_mode] instead"
 	)
 	void logUseOfDeprecatedConnectionHandlingSettings();
+
+	@LogMessage(level = WARN)
+	@Message(
+			id = 90000024,
+			value = "Application requested zero be used as the base for JDBC-style parameters found in native-queries; " +
+					"this is a *temporary* backwards-compatibility setting to help applications  using versions prior to " +
+					"5.3 in upgrading.  It will be removed in a later version."
+	)
+	void logUseOfDeprecatedZeroBasedJdbcStyleParams();
 }

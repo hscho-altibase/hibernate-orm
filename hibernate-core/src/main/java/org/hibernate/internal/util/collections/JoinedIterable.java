@@ -6,12 +6,13 @@
  */
 package org.hibernate.internal.util.collections;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
 
 /**
- * An JoinedIterable is an Iterable that wraps a number of Iterables.
+ * A JoinedIterable is an Iterable that wraps a number of Iterables.
  *
  * This class makes multiple iterables look like one to the caller.
  * When any method from the Iterator interface is called on the
@@ -69,20 +70,20 @@ public class JoinedIterable<T> implements Iterable<T> {
 			lastUsedIterator.remove();
 		}
 
-		// call this beforeQuery any Iterator method to make sure that the current Iterator
+		// call this before any Iterator method to make sure that the current Iterator
 		// is not exhausted
 		@SuppressWarnings( {"unchecked"})
 		protected void updateCurrentIterator() {
 
 			if ( currentIterator == null) {
 				if( iterables.size() == 0  ) {
-					currentIterator = EmptyIterator.INSTANCE;
+					currentIterator = Collections.emptyIterator();
 				}
 				else {
 					currentIterator = iterables.get( 0 ).iterator();
 				}
 				// set last used iterator here, in case the user calls remove
-				// beforeQuery calling hasNext() or next() (although they shouldn't)
+				// before calling hasNext() or next() (although they shouldn't)
 				lastUsedIterator = currentIterator;
 			}
 

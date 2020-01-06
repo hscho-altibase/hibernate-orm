@@ -6,12 +6,12 @@
  */
 package org.hibernate.envers.internal.tools;
 
-import javassist.util.proxy.ProxyFactory;
+import java.util.Objects;
+
 import org.hibernate.Session;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
-import org.hibernate.internal.util.compare.EqualsHelper;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.proxy.HibernateProxy;
 
@@ -23,7 +23,7 @@ public abstract class EntityTools {
 		final Object id1 = getIdentifier( session, entityName, obj1 );
 		final Object id2 = getIdentifier( session, entityName, obj2 );
 
-		return EqualsHelper.areEqual( id1, id2 );
+		return Objects.deepEquals( id1, id2 );
 	}
 
 	public static Object getIdentifier(SessionImplementor session, String entityName, Object obj) {
@@ -76,7 +76,7 @@ public abstract class EntityTools {
 		if ( clazz == null ) {
 			return null;
 		}
-		else if ( ProxyFactory.isProxyClass( clazz ) ) {
+		else if ( HibernateProxy.class.isAssignableFrom( clazz ) ) {
 			// Get the source class of Javassist proxy instance.
 			return (Class<T>) clazz.getSuperclass();
 		}
