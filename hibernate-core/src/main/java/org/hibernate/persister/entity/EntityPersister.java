@@ -376,17 +376,27 @@ public interface EntityPersister extends EntityDefinition {
 	Object load(Serializable id, Object optionalObject, LockMode lockMode, SharedSessionContractImplementor session)
 	throws HibernateException;
 
+	default Object load(Serializable id, Object optionalObject, LockMode lockMode, SharedSessionContractImplementor session, Boolean readOnly)
+	throws HibernateException {
+		return load( id, optionalObject, lockMode, session );
+	}
+
 	/**
 	 * Load an instance of the persistent class.
 	 */
 	Object load(Serializable id, Object optionalObject, LockOptions lockOptions, SharedSessionContractImplementor session)
 	throws HibernateException;
 
+	default Object load(Serializable id, Object optionalObject, LockOptions lockOptions, SharedSessionContractImplementor session, Boolean readOnly)
+			throws HibernateException {
+		return load( id, optionalObject, lockOptions, session );
+	}
+
 	/**
 	 * Performs a load of multiple entities (of this type) by identifier simultaneously.
 	 *
 	 * @param ids The identifiers to load
-	 * @param session The originating Sesison
+	 * @param session The originating Session
 	 * @param loadOptions The options for loading
 	 *
 	 * @return The loaded, matching entities
@@ -546,7 +556,7 @@ public interface EntityPersister extends EntityDefinition {
 	 * Does this class have a natural id cache
 	 */
 	boolean hasNaturalIdCache();
-	
+
 	/**
 	 * Get the NaturalId cache (optional operation)
 	 */

@@ -29,7 +29,7 @@ import org.jboss.logging.Logger;
  * Hibernate has two property scopes:
  * <ul>
  * <li><b>Factory-level</b> properties may be passed to the <tt>SessionFactory</tt> when it
- * instantiated. Each instance might have different property values. If no
+ * is instantiated. Each instance might have different property values. If no
  * properties are specified, the factory calls <tt>Environment.getProperties()</tt>.
  * <li><b>System-level</b> properties are shared by all factory instances and are always
  * determined by the <tt>Environment</tt> properties.
@@ -58,7 +58,7 @@ import org.jboss.logging.Logger;
  * <tr>
  *   <td><tt>hibernate.connection.provider_class</tt></td>
  *   <td>classname of <tt>ConnectionProvider</tt>
- *   subclass (if not specified hueristics are used)</td>
+ *   subclass (if not specified heuristics are used)</td>
  * </tr>
  * <tr><td><tt>hibernate.connection.username</tt></td><td>database username</td></tr>
  * <tr><td><tt>hibernate.connection.password</tt></td><td>database password</td></tr>
@@ -83,7 +83,7 @@ import org.jboss.logging.Logger;
  * </tr>
  * <tr>
  *   <td><tt>hibernate.connection.datasource</tt></td>
- *   <td>databasource JNDI name (when using <tt>javax.sql.Datasource</tt>)</td>
+ *   <td>datasource JNDI name (when using <tt>javax.sql.Datasource</tt>)</td>
  * </tr>
  * <tr>
  *   <td><tt>hibernate.jndi.url</tt></td><td>JNDI <tt>InitialContext</tt> URL</td>
@@ -105,7 +105,7 @@ import org.jboss.logging.Logger;
  * </tr>
  * <tr>
  *   <td><tt>hibernate.jdbc.use_scrollable_resultset</tt></td>
- *   <td>enable use of JDBC2 scrollable resultsets (you only need this specify
+ *   <td>enable use of JDBC2 scrollable resultsets (you only need to specify
  *   this property when using user supplied connections)</td>
  * </tr>
  * <tr>
@@ -231,9 +231,9 @@ public final class Environment implements AvailableSettings {
 	}
 
 	/**
-	 * This will be removed soon; currently just returns false as no known JVM exibits this bug
+	 * This will be removed soon; currently just returns false as no known JVM exhibits this bug
 	 * and is also able to run this version of Hibernate ORM.
-	 * @deprecated removed as unneccessary
+	 * @deprecated removed as unnecessary
 	 * @return false
 	 */
 	@Deprecated
@@ -351,8 +351,15 @@ public final class Environment implements AvailableSettings {
 
 		LOG.bytecodeProvider( providerName );
 
-		// todo : allow a custom class name - just check if the config is a FQN
-		//		currently we assume it is only ever the Strings "javassist" or "bytebuddy"...
+		// there is no need to support plugging in a custom BytecodeProvider via FQCN:
+		// - the static helper methods on this class are deprecated
+		// - it's possible to plug a custom BytecodeProvider directly into the ServiceRegistry
+		//
+		// This also allows integrators to inject a BytecodeProvider instance which has some
+		// state; particularly useful to inject proxy definitions which have been prepared in
+		// advance.
+		// See also https://hibernate.atlassian.net/browse/HHH-13804 and how this was solved in
+		// Quarkus.
 
 		LOG.unknownBytecodeProvider( providerName, BYTECODE_PROVIDER_NAME_DEFAULT );
 		return new org.hibernate.bytecode.internal.bytebuddy.BytecodeProviderImpl();

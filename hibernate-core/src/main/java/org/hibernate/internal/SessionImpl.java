@@ -130,14 +130,11 @@ import org.hibernate.event.spi.SaveOrUpdateEventListener;
 import org.hibernate.graph.GraphSemantic;
 import org.hibernate.graph.RootGraph;
 import org.hibernate.graph.internal.RootGraphImpl;
+import org.hibernate.graph.spi.GraphImplementor;
 import org.hibernate.graph.spi.RootGraphImplementor;
 import org.hibernate.hql.spi.QueryTranslator;
 import org.hibernate.internal.CriteriaImpl.CriterionEntry;
 import org.hibernate.internal.log.DeprecationLogger;
-import org.hibernate.jdbc.ReturningWork;
-import org.hibernate.jdbc.Work;
-import org.hibernate.jdbc.WorkExecutor;
-import org.hibernate.jdbc.WorkExecutorVisitable;
 import org.hibernate.jpa.AvailableSettings;
 import org.hibernate.jpa.QueryHints;
 import org.hibernate.jpa.internal.util.CacheModeHelper;
@@ -194,7 +191,7 @@ import static org.hibernate.cfg.AvailableSettings.JPA_SHARED_CACHE_STORE_MODE;
  * @author Chris Cranford
  * @author Sanne Grinovero
  */
-public final class SessionImpl
+public class SessionImpl
 		extends AbstractSessionImpl
 		implements EventSource, SessionImplementor, HibernateEntityManagerImplementor {
 	private static final EntityManagerMessageLogger log = HEMLogging.messageLogger( SessionImpl.class );
@@ -218,6 +215,8 @@ public final class SessionImpl
 	private transient LoadEvent loadEvent; //cached LoadEvent instance
 
 	private transient TransactionObserver transactionObserver;
+	
+	private transient GraphImplementor fetchGraphLoadContext;
 
 	public SessionImpl(SessionFactoryImpl factory, SessionCreationOptions options) {
 		super( factory, options );
@@ -255,6 +254,15 @@ public final class SessionImpl
 
 		// NOTE : pulse() already handles auto-join-ability correctly
 		getTransactionCoordinator().pulse();
+
+		final FlushMode initialMode;
+		if ( this.properties == null ) {
+			initialMode = fastSessionServices.initialSessionFlushMode;
+		}
+		else {
+			initialMode = ConfigurationHelper.getFlushMode( getSessionProperty( AvailableSettings.FLUSH_MODE ), FlushMode.AUTO );
+		}
+		getSession().setHibernateFlushMode( initialMode );
 
 		if ( log.isTraceEnabled() ) {
 			log.tracef( "Opened Session [%s] at timestamp: %s", getSessionIdentifier(), getTimestamp() );
@@ -558,13 +566,13 @@ public final class SessionImpl
 		}
 	}
 
-	private void checkNoUnresolvedActionsBeforeOperation() {
+	protected void checkNoUnresolvedActionsBeforeOperation() {
 		if ( persistenceContext.getCascadeLevel() == 0 && actionQueue.hasUnresolvedEntityInsertActions() ) {
 			throw new IllegalStateException( "There are delayed insert actions before operation as cascade level 0." );
 		}
 	}
 
-	private void checkNoUnresolvedActionsAfterOperation() {
+	protected void checkNoUnresolvedActionsAfterOperation() {
 		if ( persistenceContext.getCascadeLevel() == 0 ) {
 			actionQueue.checkNoUnresolvedActionsAfterOperation();
 		}
@@ -928,7 +936,7 @@ public final class SessionImpl
 		LoadEvent event = loadEvent;
 		loadEvent = null;
 		if ( event == null ) {
-			event = new LoadEvent( id, object, this );
+			event = new LoadEvent( id, object, this, getReadOnlyFromLoadQueryInfluencers() );
 		}
 		else {
 			event.setEntityClassName( null );
@@ -1059,7 +1067,7 @@ public final class SessionImpl
 	 */
 	private LoadEvent recycleEventInstance(final LoadEvent event, final Serializable id, final String entityName) {
 		if ( event == null ) {
-			return new LoadEvent( id, entityName, true, this );
+			return new LoadEvent( id, entityName, true, this, getReadOnlyFromLoadQueryInfluencers() );
 		}
 		else {
 			event.setEntityClassName( entityName );
@@ -2285,33 +2293,6 @@ public final class SessionImpl
 	}
 
 	@Override
-	public void doWork(final Work work) throws HibernateException {
-		WorkExecutorVisitable<Void> realWork = new WorkExecutorVisitable<Void>() {
-			@Override
-			public Void accept(WorkExecutor<Void> workExecutor, Connection connection) throws SQLException {
-				workExecutor.executeWork( work, connection );
-				return null;
-			}
-		};
-		doWork( realWork );
-	}
-
-	@Override
-	public <T> T doReturningWork(final ReturningWork<T> work) throws HibernateException {
-		WorkExecutorVisitable<T> realWork = new WorkExecutorVisitable<T>() {
-			@Override
-			public T accept(WorkExecutor<T> workExecutor, Connection connection) throws SQLException {
-				return workExecutor.executeReturningWork( work, connection );
-			}
-		};
-		return doWork( realWork );
-	}
-
-	private <T> T doWork(WorkExecutorVisitable<T> work) throws HibernateException {
-		return getJdbcCoordinator().coordinateWork( work );
-	}
-
-	@Override
 	public void afterScrollOperation() {
 		// nothing to do in a stateful session
 	}
@@ -2748,12 +2729,12 @@ public final class SessionImpl
 		@SuppressWarnings("unchecked")
 		protected T doGetReference(Serializable id) {
 			if ( this.lockOptions != null ) {
-				LoadEvent event = new LoadEvent( id, entityPersister.getEntityName(), lockOptions, SessionImpl.this );
+				LoadEvent event = new LoadEvent( id, entityPersister.getEntityName(), lockOptions, SessionImpl.this, getReadOnlyFromLoadQueryInfluencers() );
 				fireLoad( event, LoadEventListener.LOAD );
 				return (T) event.getResult();
 			}
 
-			LoadEvent event = new LoadEvent( id, entityPersister.getEntityName(), false, SessionImpl.this );
+			LoadEvent event = new LoadEvent( id, entityPersister.getEntityName(), false, SessionImpl.this, getReadOnlyFromLoadQueryInfluencers() );
 			boolean success = false;
 			try {
 				fireLoad( event, LoadEventListener.LOAD );
@@ -2784,12 +2765,12 @@ public final class SessionImpl
 		@SuppressWarnings("unchecked")
 		protected final T doLoad(Serializable id) {
 			if ( this.lockOptions != null ) {
-				LoadEvent event = new LoadEvent( id, entityPersister.getEntityName(), lockOptions, SessionImpl.this );
+				LoadEvent event = new LoadEvent( id, entityPersister.getEntityName(), lockOptions, SessionImpl.this, getReadOnlyFromLoadQueryInfluencers() );
 				fireLoad( event, LoadEventListener.GET );
 				return (T) event.getResult();
 			}
 
-			LoadEvent event = new LoadEvent( id, entityPersister.getEntityName(), false, SessionImpl.this );
+			LoadEvent event = new LoadEvent( id, entityPersister.getEntityName(), false, SessionImpl.this, getReadOnlyFromLoadQueryInfluencers() );
 			boolean success = false;
 			try {
 				fireLoad( event, LoadEventListener.GET );
@@ -3311,7 +3292,8 @@ public final class SessionImpl
 
 		try {
 			getLoadQueryInfluencers().getEffectiveEntityGraph().applyConfiguredGraph( properties );
-
+			Boolean readOnly = properties == null ? null : (Boolean) properties.get( QueryHints.HINT_READONLY );
+			getLoadQueryInfluencers().setReadOnly( readOnly );
 			final IdentifierLoadAccess<T> loadAccess = byId( entityClass );
 			loadAccess.with( determineAppropriateLocalCacheMode( properties ) );
 
@@ -3321,6 +3303,10 @@ public final class SessionImpl
 				}
 				lockOptions = buildLockOptions( lockModeType, properties );
 				loadAccess.with( lockOptions );
+			}
+			
+			if ( getLoadQueryInfluencers().getEffectiveEntityGraph().getSemantic() == GraphSemantic.FETCH ) {
+				setFetchGraphLoadContext( getLoadQueryInfluencers().getEffectiveEntityGraph().getGraph() );
 			}
 
 			return loadAccess.load( (Serializable) primaryKey );
@@ -3366,10 +3352,12 @@ public final class SessionImpl
 		}
 		finally {
 			getLoadQueryInfluencers().getEffectiveEntityGraph().clear();
+			getLoadQueryInfluencers().setReadOnly( null );
+			setFetchGraphLoadContext( null );
 		}
 	}
 
-	private CacheMode determineAppropriateLocalCacheMode(Map<String, Object> localProperties) {
+	protected CacheMode determineAppropriateLocalCacheMode(Map<String, Object> localProperties) {
 		CacheRetrieveMode retrieveMode = null;
 		CacheStoreMode storeMode = null;
 		if ( localProperties != null ) {
@@ -3738,6 +3726,16 @@ public final class SessionImpl
 		checkOpen();
 		return getEntityManagerFactory().findEntityGraphsByType( entityClass );
 	}
+	
+	@Override
+	public GraphImplementor getFetchGraphLoadContext() {
+		return this.fetchGraphLoadContext;
+	}
+	
+	@Override
+	public void setFetchGraphLoadContext(GraphImplementor fetchGraphLoadContext) {
+		this.fetchGraphLoadContext = fetchGraphLoadContext;
+	}
 
 	/**
 	 * Used by JDK serialization...
@@ -3785,5 +3783,13 @@ public final class SessionImpl
 		for ( String filterName : loadQueryInfluencers.getEnabledFilterNames() ) {
 			( (FilterImpl) loadQueryInfluencers.getEnabledFilter( filterName ) ).afterDeserialize( getFactory() );
 		}
+	}
+
+	private Boolean getReadOnlyFromLoadQueryInfluencers() {
+		Boolean readOnly = null;
+		if ( loadQueryInfluencers != null ) {
+			readOnly = loadQueryInfluencers.getReadOnly();
+		}
+		return readOnly;
 	}
 }

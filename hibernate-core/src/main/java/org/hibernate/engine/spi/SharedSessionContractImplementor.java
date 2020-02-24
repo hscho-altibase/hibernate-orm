@@ -30,6 +30,7 @@ import org.hibernate.engine.jdbc.LobCreationContext;
 import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
 import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.engine.query.spi.sql.NativeSQLQuerySpecification;
+import org.hibernate.graph.spi.GraphImplementor;
 import org.hibernate.internal.util.config.ConfigurationHelper;
 import org.hibernate.jpa.spi.HibernateEntityManagerImplementor;
 import org.hibernate.loader.custom.CustomQuery;
@@ -122,7 +123,7 @@ public interface SharedSessionContractImplementor
 	/**
 	 * Checks whether the session is closed.  Provided separately from
 	 * {@link #isOpen()} as this method does not attempt any JTA synchronization
-	 * registration, where as {@link #isOpen()} does; which makes this one
+	 * registration, whereas {@link #isOpen()} does; which makes this one
 	 * nicer to use for most internal purposes.
 	 *
 	 * @return {@code true} if the session is closed; {@code false} otherwise.
@@ -194,7 +195,7 @@ public interface SharedSessionContractImplementor
 	 * Check if an active Transaction is necessary for the update operation to be executed.
 	 * If an active Transaction is necessary but it is not then a TransactionRequiredException is raised.
 	 *
-	 * @param exceptionMessage, the message to use for the TransactionRequiredException
+	 * @param exceptionMessage the message to use for the TransactionRequiredException
 	 */
 	default void checkTransactionNeededForUpdateOperation(String exceptionMessage) {
 		if ( !isTransactionInProgress() ) {
@@ -521,5 +522,32 @@ public interface SharedSessionContractImplementor
 	 * @return the PersistenceContext associated to this session.
 	 */
 	PersistenceContext getPersistenceContextInternal();
+
+	/**
+	 * Get the current fetch graph context (either {@link org.hibernate.graph.spi.RootGraphImplementor} or {@link org.hibernate.graph.spi.SubGraphImplementor}. 
+	 * Suppose fetch graph is "a(b(c))", then during {@link org.hibernate.engine.internal.TwoPhaseLoad}:
+	 * <ul>
+	 *     <li>when loading root</li>: {@link org.hibernate.graph.spi.RootGraphImplementor root} will be returned
+	 *     <li>when internally loading 'a'</li>: {@link org.hibernate.graph.spi.SubGraphImplementor subgraph} of 'a' will be returned
+	 *     <li>when internally loading 'b'</li>: {@link org.hibernate.graph.spi.SubGraphImplementor subgraph} of 'a(b)' will be returned
+	 *     <li>when internally loading 'c'</li>: {@link org.hibernate.graph.spi.SubGraphImplementor subgraph} of 'a(b(c))' will be returned
+	 * </ul>
+	 * 
+	 * @return current fetch graph context; can be null if fetch graph is not effective or the graph eager loading is done.
+	 * @see #setFetchGraphLoadContext(GraphImplementor) 
+	 * @see org.hibernate.engine.internal.TwoPhaseLoad
+	 */
+	default GraphImplementor getFetchGraphLoadContext() {
+		return null;
+	}
+
+	/**
+	 * Set the current fetch graph context (either {@link org.hibernate.graph.spi.RootGraphImplementor} or {@link org.hibernate.graph.spi.SubGraphImplementor}.
+	 * 
+	 * @param fetchGraphLoadContext new fetch graph context; can be null (this field will be set to null after root entity loading is done).
+	 * @see #getFetchGraphLoadContext()                                 
+	 */
+	default void setFetchGraphLoadContext(GraphImplementor fetchGraphLoadContext) {
+	}
 
 }

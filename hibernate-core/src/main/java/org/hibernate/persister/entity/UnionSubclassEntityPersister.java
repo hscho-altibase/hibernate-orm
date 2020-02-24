@@ -46,7 +46,7 @@ import org.hibernate.type.Type;
 
 /**
  * Implementation of the "table-per-concrete-class" or "roll-down" mapping
- * strategy for an entity and its inheritence hierarchy.
+ * strategy for an entity and its inheritance hierarchy.
  *
  * @author Gavin King
  */
@@ -287,19 +287,19 @@ public class UnionSubclassEntityPersister extends AbstractEntityPersister {
 		return null;
 	}
 
-	protected String getTableName(int j) {
+	public String getTableName(int j) {
 		return tableName;
 	}
 
-	protected String[] getKeyColumns(int j) {
+	public String[] getKeyColumns(int j) {
 		return getIdentifierColumnNames();
 	}
 
-	protected boolean isTableCascadeDeleteEnabled(int j) {
+	public boolean isTableCascadeDeleteEnabled(int j) {
 		return false;
 	}
 
-	protected boolean isPropertyOfTable(int property, int j) {
+	public boolean isPropertyOfTable(int property, int j) {
 		return true;
 	}
 
@@ -310,7 +310,7 @@ public class UnionSubclassEntityPersister extends AbstractEntityPersister {
 	}
 
 	@Override
-	public String filterFragment(String name) {
+	protected String filterFragment(String name) {
 		return hasWhere()
 				? " and " + getSQLWhereString( name )
 				: "";

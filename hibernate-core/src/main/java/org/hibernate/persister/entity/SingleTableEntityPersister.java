@@ -47,8 +47,8 @@ import org.hibernate.type.Type;
 /**
  * The default implementation of the <tt>EntityPersister</tt> interface.
  * Implements the "table-per-class-hierarchy" or "roll-up" mapping strategy
- * for an entity class and its inheritence hierarchy.  This is implemented
- * as a single table holding all classes in the hierarchy with a discrimator
+ * for an entity class and its inheritance hierarchy.  This is implemented
+ * as a single table holding all classes in the hierarchy with a discriminator
  * column used to determine which concrete class is referenced.
  *
  * @author Gavin King
@@ -450,7 +450,7 @@ public class SingleTableEntityPersister extends AbstractEntityPersister {
 		}
 	}
 
-	protected boolean isInverseTable(int j) {
+	public boolean isInverseTable(int j) {
 		return isInverseTable[j];
 	}
 
@@ -470,11 +470,11 @@ public class SingleTableEntityPersister extends AbstractEntityPersister {
 		return discriminatorColumnReaderTemplate;
 	}
 
-	protected String getDiscriminatorAlias() {
+	public String getDiscriminatorAlias() {
 		return discriminatorAlias;
 	}
 
-	protected String getDiscriminatorFormulaTemplate() {
+	public String getDiscriminatorFormulaTemplate() {
 		return discriminatorFormulaTemplate;
 	}
 
@@ -525,19 +525,19 @@ public class SingleTableEntityPersister extends AbstractEntityPersister {
 		return discriminatorFormula;
 	}
 
-	protected String getTableName(int j) {
+	public String getTableName(int j) {
 		return qualifiedTableNames[j];
 	}
 
-	protected String[] getKeyColumns(int j) {
+	public String[] getKeyColumns(int j) {
 		return keyColumnNames[j];
 	}
 
-	protected boolean isTableCascadeDeleteEnabled(int j) {
+	public boolean isTableCascadeDeleteEnabled(int j) {
 		return cascadeDeleteEnabled[j];
 	}
 
-	protected boolean isPropertyOfTable(int property, int j) {
+	public boolean isPropertyOfTable(int property, int j) {
 		return propertyTableNumbers[property] == j;
 	}
 
@@ -552,7 +552,7 @@ public class SingleTableEntityPersister extends AbstractEntityPersister {
 	}
 
 	@Override
-	public String filterFragment(String alias) throws MappingException {
+	protected String filterFragment(String alias) throws MappingException {
 		String result = discriminatorFilterFragment( alias );
 		if ( hasWhere() ) {
 			result += " and " + getSQLWhereString( alias );
@@ -578,7 +578,7 @@ public class SingleTableEntityPersister extends AbstractEntityPersister {
 	}
 
 	@Override
-	public String filterFragment(String alias, Set<String> treatAsDeclarations) {
+	protected String filterFragment(String alias, Set<String> treatAsDeclarations) {
 		String result = discriminatorFilterFragment( alias, treatAsDeclarations );
 		if ( hasWhere() ) {
 			result += " and " + getSQLWhereString( alias );
@@ -810,7 +810,7 @@ public class SingleTableEntityPersister extends AbstractEntityPersister {
 		return subclassTableIsLazyClosure[j];
 	}
 
-	protected boolean isNullableTable(int j) {
+	public boolean isNullableTable(int j) {
 		return isNullableTable[j];
 	}
 

@@ -62,6 +62,10 @@ import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.engine.transaction.internal.TransactionImpl;
 import org.hibernate.engine.transaction.spi.TransactionImplementor;
 import org.hibernate.id.uuid.StandardRandomStrategy;
+import org.hibernate.jdbc.ReturningWork;
+import org.hibernate.jdbc.Work;
+import org.hibernate.jdbc.WorkExecutorVisitable;
+import org.hibernate.jpa.QueryHints;
 import org.hibernate.jpa.internal.util.FlushModeTypeHelper;
 import org.hibernate.jpa.spi.CriteriaQueryTupleTransformer;
 import org.hibernate.jpa.spi.HibernateEntityManagerImplementor;
@@ -193,7 +197,7 @@ public abstract class AbstractSharedSessionContract implements SharedSessionCont
 			this.transactionCoordinator = sharedOptions.getTransactionCoordinator();
 			this.jdbcCoordinator = sharedOptions.getJdbcCoordinator();
 
-			// todo : "wrap" the transaction to no-op cmmit/rollback attempts?
+			// todo : "wrap" the transaction to no-op comit/rollback attempts?
 			this.currentHibernateTransaction = sharedOptions.getTransaction();
 
 			if ( sharedOptions.shouldAutoJoinTransactions() ) {
@@ -695,6 +699,9 @@ public abstract class AbstractSharedSessionContract implements SharedSessionCont
 		if ( nqd.getFlushMode() != null ) {
 			query.setHibernateFlushMode( nqd.getFlushMode() );
 		}
+		if ( nqd.getPassDistinctThrough() != null ) {
+			query.setHint( QueryHints.HINT_PASS_DISTINCT_THROUGH, nqd.getPassDistinctThrough() );
+		}
 	}
 
 	@Override
@@ -1053,6 +1060,28 @@ public abstract class AbstractSharedSessionContract implements SharedSessionCont
 	@Override
 	public NativeQueryImplementor createSQLQuery(String queryString) {
 		return getNativeQueryImplementor( queryString, true );
+	}
+
+	@Override
+	public void doWork(final Work work) throws HibernateException {
+		WorkExecutorVisitable<Void> realWork = (workExecutor, connection) -> {
+			workExecutor.executeWork( work, connection );
+			return null;
+		};
+		doWork( realWork );
+	}
+
+	@Override
+	public <T> T doReturningWork(final ReturningWork<T> work) throws HibernateException {
+		WorkExecutorVisitable<T> realWork = (workExecutor, connection) -> workExecutor.executeReturningWork(
+				work,
+				connection
+		);
+		return doWork( realWork );
+	}
+
+	private <T> T doWork(WorkExecutorVisitable<T> work) throws HibernateException {
+		return getJdbcCoordinator().coordinateWork( work );
 	}
 
 	protected NativeQueryImplementor getNativeQueryImplementor(

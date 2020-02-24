@@ -338,15 +338,15 @@ public abstract class AbstractEntityPersister
 
 	public abstract int getSubclassTableSpan();
 
-	protected abstract int getTableSpan();
+	public abstract int getTableSpan();
 
-	protected abstract boolean isTableCascadeDeleteEnabled(int j);
+	public abstract boolean isTableCascadeDeleteEnabled(int j);
 
-	protected abstract String getTableName(int j);
+	public abstract String getTableName(int j);
 
-	protected abstract String[] getKeyColumns(int j);
+	public abstract String[] getKeyColumns(int j);
 
-	protected abstract boolean isPropertyOfTable(int property, int j);
+	public abstract boolean isPropertyOfTable(int property, int j);
 
 	protected abstract int[] getPropertyTableNumbersInSelect();
 
@@ -377,19 +377,19 @@ public abstract class AbstractEntityPersister
 		}
 	}
 
-	protected String getDiscriminatorAlias() {
+	public String getDiscriminatorAlias() {
 		return DISCRIMINATOR_ALIAS;
 	}
 
-	protected String getDiscriminatorFormulaTemplate() {
+	public String getDiscriminatorFormulaTemplate() {
 		return null;
 	}
 
-	protected boolean isInverseTable(int j) {
+	public boolean isInverseTable(int j) {
 		return false;
 	}
 
-	protected boolean isNullableTable(int j) {
+	public boolean isNullableTable(int j) {
 		return false;
 	}
 
@@ -413,7 +413,7 @@ public abstract class AbstractEntityPersister
 		return rootTableKeyColumnNames;
 	}
 
-	protected String[] getSQLUpdateByRowIdStrings() {
+	public String[] getSQLUpdateByRowIdStrings() {
 		if ( sqlUpdateByRowIdString == null ) {
 			throw new AssertionFailure( "no update by row id" );
 		}
@@ -423,7 +423,7 @@ public abstract class AbstractEntityPersister
 		return result;
 	}
 
-	protected String[] getSQLLazyUpdateByRowIdStrings() {
+	public String[] getSQLLazyUpdateByRowIdStrings() {
 		if ( sqlLazyUpdateByRowIdString == null ) {
 			throw new AssertionFailure( "no update by row id" );
 		}
@@ -433,28 +433,40 @@ public abstract class AbstractEntityPersister
 		return result;
 	}
 
-	protected String getSQLSnapshotSelectString() {
+	public String getSQLSnapshotSelectString() {
 		return sqlSnapshotSelectString;
 	}
 
-	protected String getSQLLazySelectString(String fetchGroup) {
+	public String getSQLLazySelectString(String fetchGroup) {
 		return sqlLazySelectStringsByFetchGroup.get( fetchGroup );
 	}
 
-	protected String[] getSQLDeleteStrings() {
+	public String[] getSQLDeleteStrings() {
 		return sqlDeleteStrings;
 	}
 
-	protected String[] getSQLInsertStrings() {
+	public String[] getSQLInsertStrings() {
 		return sqlInsertStrings;
 	}
 
-	protected String[] getSQLUpdateStrings() {
+	public String[] getSQLUpdateStrings() {
 		return sqlUpdateStrings;
 	}
 
-	protected String[] getSQLLazyUpdateStrings() {
+	public String[] getSQLLazyUpdateStrings() {
 		return sqlLazyUpdateStrings;
+	}
+
+	public ExecuteUpdateResultCheckStyle[] getInsertResultCheckStyles() {
+		return insertResultCheckStyles;
+	}
+
+	public ExecuteUpdateResultCheckStyle[] getUpdateResultCheckStyles() {
+		return updateResultCheckStyles;
+	}
+
+	public ExecuteUpdateResultCheckStyle[] getDeleteResultCheckStyles() {
+		return deleteResultCheckStyles;
 	}
 
 	/**
@@ -462,23 +474,23 @@ public abstract class AbstractEntityPersister
 	 *
 	 * @return The IDENTITY-based insertion query.
 	 */
-	protected String getSQLIdentityInsertString() {
+	public String getSQLIdentityInsertString() {
 		return sqlIdentityInsertString;
 	}
 
-	protected String getVersionSelectString() {
+	public String getVersionSelectString() {
 		return sqlVersionSelectString;
 	}
 
-	protected boolean isInsertCallable(int j) {
+	public boolean isInsertCallable(int j) {
 		return insertCallable[j];
 	}
 
-	protected boolean isUpdateCallable(int j) {
+	public boolean isUpdateCallable(int j) {
 		return updateCallable[j];
 	}
 
-	protected boolean isDeleteCallable(int j) {
+	public boolean isDeleteCallable(int j) {
 		return deleteCallable[j];
 	}
 
@@ -505,7 +517,7 @@ public abstract class AbstractEntityPersister
 	 *
 	 * @return Array of booleans indicating which table require updating.
 	 */
-	protected boolean[] getTableUpdateNeeded(final int[] dirtyProperties, boolean hasDirtyCollection) {
+	public boolean[] getTableUpdateNeeded(final int[] dirtyProperties, boolean hasDirtyCollection) {
 
 		if ( dirtyProperties == null ) {
 			return getTableHasColumns(); // for objects that came in via update()
@@ -539,15 +551,15 @@ public abstract class AbstractEntityPersister
 		return rowIdName != null;
 	}
 
-	protected boolean[][] getPropertyColumnUpdateable() {
+	public boolean[][] getPropertyColumnUpdateable() {
 		return propertyColumnUpdateable;
 	}
 
-	protected boolean[][] getPropertyColumnInsertable() {
+	public boolean[][] getPropertyColumnInsertable() {
 		return propertyColumnInsertable;
 	}
 
-	protected boolean[] getPropertySelectable() {
+	public boolean[] getPropertySelectable() {
 		return propertySelectable;
 	}
 
@@ -1381,11 +1393,11 @@ public abstract class AbstractEntityPersister
 		return rootTableKeyColumnReaderTemplates;
 	}
 
-	protected int getIdentifierColumnSpan() {
+	public int getIdentifierColumnSpan() {
 		return identifierColumnSpan;
 	}
 
-	protected String[] getIdentifierAliases() {
+	public String[] getIdentifierAliases() {
 		return identifierAliases;
 	}
 
@@ -1393,7 +1405,7 @@ public abstract class AbstractEntityPersister
 		return versionColumnName;
 	}
 
-	protected String getVersionedTableName() {
+	public String getVersionedTableName() {
 		return getTableName( 0 );
 	}
 
@@ -1441,7 +1453,7 @@ public abstract class AbstractEntityPersister
 
 	public String getDiscriminatorAlias(String suffix) {
 		// NOTE: this assumes something about how propertySelectFragment is implemented by the subclass!
-		// was toUnqotedAliasStrings( getdiscriminatorColumnName() ) before - now tried
+		// toUnqotedAliasStrings( getdiscriminatorColumnName() ) before - now tried
 		// to remove that unqoting and missing aliases..
 		return entityMetamodel.hasSubclasses() ?
 				new Alias( suffix ).toAliasString( getDiscriminatorAlias() ) :
@@ -1624,7 +1636,7 @@ public abstract class AbstractEntityPersister
 
 	}
 
-	protected String generateIdByUniqueKeySelectString(String uniquePropertyName) {
+	public String generateIdByUniqueKeySelectString(String uniquePropertyName) {
 		Select select = new Select( getFactory().getDialect() );
 
 		if ( getFactory().getSessionFactoryOptions().isCommentsEnabled() ) {
@@ -1681,7 +1693,7 @@ public abstract class AbstractEntityPersister
 	/**
 	 * Generate the SQL that selects the version number by id
 	 */
-	protected String generateSelectVersionString() {
+	public String generateSelectVersionString() {
 		SimpleSelect select = new SimpleSelect( getFactory().getDialect() )
 				.setTableName( getVersionedTableName() );
 		if ( isVersioned() ) {
@@ -1700,11 +1712,11 @@ public abstract class AbstractEntityPersister
 		return propertyUniqueness;
 	}
 
-	protected String generateInsertGeneratedValuesSelectString() {
+	public String generateInsertGeneratedValuesSelectString() {
 		return generateGeneratedValuesSelectString( GenerationTiming.INSERT );
 	}
 
-	protected String generateUpdateGeneratedValuesSelectString() {
+	public String generateUpdateGeneratedValuesSelectString() {
 		return generateGeneratedValuesSelectString( GenerationTiming.ALWAYS );
 	}
 
@@ -1786,7 +1798,7 @@ public abstract class AbstractEntityPersister
 		return frag.toFragmentString();
 	}
 
-	protected String generateSnapshotSelectString() {
+	public String generateSnapshotSelectString() {
 
 		//TODO: should we use SELECT .. FOR UPDATE?
 
@@ -1882,8 +1894,7 @@ public abstract class AbstractEntityPersister
 	}
 
 	private String generateVersionIncrementUpdateString() {
-		Update update = new Update( getFactory().getDialect() );
-		update.setTableName( getTableName( 0 ) );
+		Update update = createUpdate().setTableName( getTableName( 0 ) );
 		if ( getFactory().getSessionFactoryOptions().isCommentsEnabled() ) {
 			update.setComment( "forced version increment" );
 		}
@@ -2162,11 +2173,11 @@ public abstract class AbstractEntityPersister
 		return propertyColumnWriters[i];
 	}
 
-	protected int getPropertyColumnSpan(int i) {
+	public int getPropertyColumnSpan(int i) {
 		return propertyColumnSpans[i];
 	}
 
-	protected boolean hasFormulaProperties() {
+	public boolean hasFormulaProperties() {
 		return hasFormulaProperties;
 	}
 
@@ -2548,7 +2559,7 @@ public abstract class AbstractEntityPersister
 	 *
 	 * @param lockMode The lock mode to apply to the thing being loaded.
 	 *
-	 * @return
+	 * @return The UniqueEntityLoader.
 	 *
 	 * @throws MappingException
 	 */
@@ -2587,28 +2598,20 @@ public abstract class AbstractEntityPersister
 		return true;
 	}
 
-	protected String generateUpdateString(boolean[] includeProperty, int j, boolean useRowId) {
+	public String generateUpdateString(boolean[] includeProperty, int j, boolean useRowId) {
 		return generateUpdateString( includeProperty, j, null, useRowId );
 	}
 
 	/**
 	 * Generate the SQL that updates a row by id (and version)
 	 */
-	protected String generateUpdateString(
+	public String generateUpdateString(
 			final boolean[] includeProperty,
 			final int j,
 			final Object[] oldFields,
 			final boolean useRowId) {
 
-		Update update = new Update( getFactory().getDialect() ).setTableName( getTableName( j ) );
-
-		// select the correct row by either pk or rowid
-		if ( useRowId ) {
-			update.addPrimaryKeyColumns( new String[] {rowIdName} ); //TODO: eventually, rowIdName[j]
-		}
-		else {
-			update.addPrimaryKeyColumns( getKeyColumns( j ) );
-		}
+		Update update = createUpdate().setTableName( getTableName( j ) );
 
 		boolean hasColumns = false;
 		for ( int i = 0; i < entityMetamodel.getPropertySpan(); i++ ) {
@@ -2635,6 +2638,14 @@ public abstract class AbstractEntityPersister
 				);
 				hasColumns = true;
 			}
+		}
+
+		// select the correct row by either pk or rowid
+		if ( useRowId ) {
+			update.addPrimaryKeyColumns( new String[] {rowIdName} ); //TODO: eventually, rowIdName[j]
+		}
+		else {
+			update.addPrimaryKeyColumns( getKeyColumns( j ) );
 		}
 
 		if ( j == 0 && isVersioned() && entityMetamodel.getOptimisticLockStyle() == OptimisticLockStyle.VERSION ) {
@@ -2688,29 +2699,28 @@ public abstract class AbstractEntityPersister
 		return hasColumns ? update.toStatementString() : null;
 	}
 
-	protected final boolean checkVersion(final boolean[] includeProperty) {
+	public final boolean checkVersion(final boolean[] includeProperty) {
 		return includeProperty[getVersionProperty()]
 				|| entityMetamodel.isVersionGenerated();
 	}
 
-	protected String generateInsertString(boolean[] includeProperty, int j) {
+	public String generateInsertString(boolean[] includeProperty, int j) {
 		return generateInsertString( false, includeProperty, j );
 	}
 
-	protected String generateInsertString(boolean identityInsert, boolean[] includeProperty) {
+	public String generateInsertString(boolean identityInsert, boolean[] includeProperty) {
 		return generateInsertString( identityInsert, includeProperty, 0 );
 	}
 
 	/**
 	 * Generate the SQL that inserts a row
 	 */
-	protected String generateInsertString(boolean identityInsert, boolean[] includeProperty, int j) {
+	public String generateInsertString(boolean identityInsert, boolean[] includeProperty, int j) {
 
 		// todo : remove the identityInsert param and variations;
 		//   identity-insert strings are now generated from generateIdentityInsertString()
 
-		Insert insert = new Insert( getFactory().getDialect() )
-				.setTableName( getTableName( j ) );
+		Insert insert = createInsert().setTableName( getTableName( j ) );
 
 		// add normal properties
 		for ( int i = 0; i < entityMetamodel.getPropertySpan(); i++ ) {
@@ -2794,7 +2804,7 @@ public abstract class AbstractEntityPersister
 	}
 
 	/**
-	 * Used to generate an insery statement against the root table in the
+	 * Used to generate an insert statement against the root table in the
 	 * case of identifier generation strategies where the insert statement
 	 * executions actually generates the identifier value.
 	 *
@@ -2803,7 +2813,7 @@ public abstract class AbstractEntityPersister
 	 *
 	 * @return The insert SQL statement string
 	 */
-	protected String generateIdentityInsertString(boolean[] includeProperty) {
+	public String generateIdentityInsertString(boolean[] includeProperty) {
 		Insert insert = identityDelegate.prepareIdentifierGeneratingInsert();
 		insert.setTableName( getTableName( 0 ) );
 
@@ -2870,9 +2880,8 @@ public abstract class AbstractEntityPersister
 	/**
 	 * Generate the SQL that deletes a row by id (and version)
 	 */
-	protected String generateDeleteString(int j) {
-		final Delete delete = new Delete()
-				.setTableName( getTableName( j ) )
+	public String generateDeleteString(int j) {
+		final Delete delete = createDelete().setTableName( getTableName( j ) )
 				.addPrimaryKeyColumns( getKeyColumns( j ) );
 		if ( j == 0 ) {
 			delete.setVersionColumnName( getVersionColumnName() );
@@ -2883,7 +2892,7 @@ public abstract class AbstractEntityPersister
 		return delete.toStatementString();
 	}
 
-	protected int dehydrate(
+	public int dehydrate(
 			Serializable id,
 			Object[] fields,
 			boolean[] includeProperty,
@@ -2898,7 +2907,7 @@ public abstract class AbstractEntityPersister
 	/**
 	 * Marshall the fields of a persistent instance to a prepared statement
 	 */
-	protected int dehydrate(
+	public int dehydrate(
 			final Serializable id,
 			final Object[] fields,
 			final Object rowId,
@@ -2972,7 +2981,7 @@ public abstract class AbstractEntityPersister
 	}
 
 	/**
-	 * Unmarshall the fields of a persistent instance from a result set,
+	 * Unmarshal the fields of a persistent instance from a result set,
 	 * without resolving associations or collections. Question: should
 	 * this really be here, or should it be sent back to Loader?
 	 */
@@ -3079,11 +3088,11 @@ public abstract class AbstractEntityPersister
 		}
 	}
 
-	protected boolean useInsertSelectIdentity() {
+	public boolean useInsertSelectIdentity() {
 		return !useGetGeneratedKeys() && getFactory().getDialect().getIdentityColumnSupport().supportsInsertSelectIdentity();
 	}
 
-	protected boolean useGetGeneratedKeys() {
+	public boolean useGetGeneratedKeys() {
 		return getFactory().getSessionFactoryOptions().isGetGeneratedKeysEnabled();
 	}
 
@@ -3097,7 +3106,7 @@ public abstract class AbstractEntityPersister
 	 * This form is used for PostInsertIdentifierGenerator-style ids (IDENTITY,
 	 * select, etc).
 	 */
-	protected Serializable insert(
+	public Serializable insert(
 			final Object[] fields,
 			final boolean[] notNull,
 			String sql,
@@ -3150,7 +3159,7 @@ public abstract class AbstractEntityPersister
 	 * This for is used for all non-root tables as well as the root table
 	 * in cases where the identifier value is known before the insert occurs.
 	 */
-	protected void insert(
+	public void insert(
 			final Serializable id,
 			final Object[] fields,
 			final boolean[] notNull,
@@ -3253,7 +3262,7 @@ public abstract class AbstractEntityPersister
 	/**
 	 * Perform an SQL UPDATE or SQL INSERT
 	 */
-	protected void updateOrInsert(
+	public void updateOrInsert(
 			final Serializable id,
 			final Object[] fields,
 			final Object[] oldFields,
@@ -3307,7 +3316,7 @@ public abstract class AbstractEntityPersister
 
 	private BasicBatchKey updateBatchKey;
 
-	protected boolean update(
+	public boolean update(
 			final Serializable id,
 			final Object[] fields,
 			final Object[] oldFields,
@@ -3455,7 +3464,7 @@ public abstract class AbstractEntityPersister
 	/**
 	 * Perform an SQL DELETE
 	 */
-	protected void delete(
+	public void delete(
 			final Serializable id,
 			final Object version,
 			final int j,
@@ -3790,7 +3799,7 @@ public abstract class AbstractEntityPersister
 		final String[] deleteStrings;
 		if ( isImpliedOptimisticLocking && loadedState != null ) {
 			// we need to utilize dynamic delete statements
-			deleteStrings = generateSQLDeletStrings( loadedState );
+			deleteStrings = generateSQLDeleteStrings( loadedState );
 		}
 		else {
 			// otherwise, utilize the static delete statements
@@ -3808,12 +3817,11 @@ public abstract class AbstractEntityPersister
 				|| entityMetamodel.getOptimisticLockStyle() == OptimisticLockStyle.ALL;
 	}
 
-	private String[] generateSQLDeletStrings(Object[] loadedState) {
+	private String[] generateSQLDeleteStrings(Object[] loadedState) {
 		int span = getTableSpan();
 		String[] deleteStrings = new String[span];
 		for ( int j = span - 1; j >= 0; j-- ) {
-			Delete delete = new Delete()
-					.setTableName( getTableName( j ) )
+			Delete delete = createDelete().setTableName( getTableName( j ) )
 					.addPrimaryKeyColumns( getKeyColumns( j ) );
 			if ( getFactory().getSessionFactoryOptions().isCommentsEnabled() ) {
 				delete.setComment( "delete " + getEntityName() + " [" + j + "]" );
@@ -4370,13 +4378,22 @@ public abstract class AbstractEntityPersister
 	 */
 	public Object load(Serializable id, Object optionalObject, LockOptions lockOptions, SharedSessionContractImplementor session)
 			throws HibernateException {
+		return doLoad( id, optionalObject, lockOptions, session, null );
+	}
 
+	public Object load(Serializable id, Object optionalObject, LockOptions lockOptions, SharedSessionContractImplementor session, Boolean readOnly)
+			throws HibernateException {
+		return doLoad( id, optionalObject, lockOptions, session, readOnly );
+	}
+
+	private Object doLoad(Serializable id, Object optionalObject, LockOptions lockOptions, SharedSessionContractImplementor session, Boolean readOnly)
+			throws HibernateException {
 		if ( LOG.isTraceEnabled() ) {
 			LOG.tracev( "Fetching entity: {0}", MessageHelper.infoString( this, id, getFactory() ) );
 		}
 
 		final UniqueEntityLoader loader = getAppropriateLoader( lockOptions, session );
-		return loader.load( id, optionalObject, session, lockOptions );
+		return loader.load( id, optionalObject, session, lockOptions, readOnly );
 	}
 
 	@Override
@@ -4502,7 +4519,7 @@ public abstract class AbstractEntityPersister
 		}
 	}
 
-	protected final boolean isAllNull(Object[] array, int tableNumber) {
+	public final boolean isAllNull(Object[] array, int tableNumber) {
 		for ( int i = 0; i < array.length; i++ ) {
 			if ( isPropertyOfTable( i, tableNumber ) && array[i] != null ) {
 				return false;
@@ -4519,7 +4536,7 @@ public abstract class AbstractEntityPersister
 	 * Transform the array of property indexes to an array of booleans,
 	 * true when the property is dirty
 	 */
-	protected final boolean[] getPropertiesToUpdate(final int[] dirtyProperties, final boolean hasDirtyCollection) {
+	public final boolean[] getPropertiesToUpdate(final int[] dirtyProperties, final boolean hasDirtyCollection) {
 		final boolean[] propsToUpdate = new boolean[entityMetamodel.getPropertySpan()];
 		final boolean[] updateability = getPropertyUpdateability(); //no need to check laziness, dirty checking handles that
 		for ( int j = 0; j < dirtyProperties.length; j++ ) {
@@ -4543,7 +4560,7 @@ public abstract class AbstractEntityPersister
 	 * Transform the array of property indexes to an array of booleans,
 	 * true when the property is insertable and non-null
 	 */
-	protected boolean[] getPropertiesToInsert(Object[] fields) {
+	public boolean[] getPropertiesToInsert(Object[] fields) {
 		boolean[] notNull = new boolean[fields.length];
 		boolean[] insertable = getPropertyInsertability();
 		for ( int i = 0; i < fields.length; i++ ) {
@@ -4617,7 +4634,7 @@ public abstract class AbstractEntityPersister
 	 * Which properties appear in the SQL update?
 	 * (Initialized, updateable ones!)
 	 */
-	protected boolean[] getPropertyUpdateability(Object entity) {
+	public boolean[] getPropertyUpdateability(Object entity) {
 		return hasUninitializedLazyProperties( entity )
 				? getNonLazyPropertyUpdateability()
 				: getPropertyUpdateability();
@@ -4854,7 +4871,7 @@ public abstract class AbstractEntityPersister
 		return entityMetamodel.isMutable();
 	}
 
-	protected final boolean isModifiableEntity(EntityEntry entry) {
+	public final boolean isModifiableEntity(EntityEntry entry) {
 		return ( entry == null ? isMutable() : entry.isModifiableEntity() );
 	}
 
@@ -4899,7 +4916,7 @@ public abstract class AbstractEntityPersister
 		return entityMetamodel.isDynamicInsert();
 	}
 
-	protected boolean hasEmbeddedCompositeIdentifier() {
+	public boolean hasEmbeddedCompositeIdentifier() {
 		return entityMetamodel.getIdentifierProperty().isEmbedded();
 	}
 
@@ -5161,7 +5178,7 @@ public abstract class AbstractEntityPersister
 		return false;
 	}
 
-	protected int getPropertySpan() {
+	public int getPropertySpan() {
 		return entityMetamodel.getPropertySpan();
 	}
 
@@ -5517,7 +5534,7 @@ public abstract class AbstractEntityPersister
 		return generateEntityIdByNaturalIdSql( valueNullness );
 	}
 
-	protected boolean isNaturalIdNonNullable() {
+	public boolean isNaturalIdNonNullable() {
 		if ( naturalIdIsNonNullable == null ) {
 			naturalIdIsNonNullable = determineNaturalIdNullability();
 		}
@@ -5979,5 +5996,17 @@ public abstract class AbstractEntityPersister
 		public String process() {
 			return substituteBrackets( getOriginalQueryString() );
 		}
+	}
+
+	protected Insert createInsert() {
+		return new Insert( getFactory().getJdbcServices().getDialect() );
+	}
+
+	protected Update createUpdate() {
+		return new Update( getFactory().getJdbcServices().getDialect() );
+	}
+
+	protected Delete createDelete() {
+		return new Delete();
 	}
 }

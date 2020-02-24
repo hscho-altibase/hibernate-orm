@@ -1111,11 +1111,11 @@ public abstract class Dialect implements ConversionContext {
 	}
 
 	/**
-	 * Apply s limit clause to the query.
+	 * Apply a limit clause to the query.
 	 * <p/>
 	 * Typically dialects utilize {@link #supportsVariableLimit() variable}
 	 * limit clauses when they support limits.  Thus, when building the
-	 * select command we do not actually need to know the limit or the offest
+	 * select command we do not actually need to know the limit or the offset
 	 * since we will just be using placeholders.
 	 * <p/>
 	 * Here we do still pass along whether or not an offset was specified
@@ -1262,7 +1262,7 @@ public abstract class Dialect implements ConversionContext {
 
 	/**
 	 * Get the string to append to SELECT statements to acquire WRITE locks
-	 * for this dialect.  Location of the of the returned string is treated
+	 * for this dialect.  Location of the returned string is treated
 	 * the same as getForUpdateString.
 	 *
 	 * @param timeout in milliseconds, -1 for indefinite wait and 0 for no wait.
@@ -1290,7 +1290,7 @@ public abstract class Dialect implements ConversionContext {
 
 	/**
 	 * Get the string to append to SELECT statements to acquire READ locks
-	 * for this dialect.  Location of the of the returned string is treated
+	 * for this dialect.  Location of the returned string is treated
 	 * the same as getForUpdateString.
 	 *
 	 * @param timeout in milliseconds, -1 for indefinite wait and 0 for no wait.
@@ -1303,7 +1303,7 @@ public abstract class Dialect implements ConversionContext {
 	/**
 	 * Get the string to append to SELECT statements to acquire READ locks
 	 * for this dialect given the aliases of the columns to be read locked.
-	 * Location of the of the returned string is treated
+	 * Location of the returned string is treated
 	 * the same as getForUpdateString.
 	 *
 	 * @param aliases The columns to be read locked.
@@ -1418,7 +1418,7 @@ public abstract class Dialect implements ConversionContext {
 
 	/**
 	 * Some dialects support an alternative means to <tt>SELECT FOR UPDATE</tt>,
-	 * whereby a "lock hint" is appends to the table name in the from clause.
+	 * whereby a "lock hint" is appended to the table name in the from clause.
 	 * <p/>
 	 * contributed by <a href="http://sourceforge.net/users/heschulz">Helge Schulz</a>
 	 *
@@ -1433,7 +1433,7 @@ public abstract class Dialect implements ConversionContext {
 	}
 	/**
 	 * Some dialects support an alternative means to <tt>SELECT FOR UPDATE</tt>,
-	 * whereby a "lock hint" is appends to the table name in the from clause.
+	 * whereby a "lock hint" is appended to the table name in the from clause.
 	 * <p/>
 	 * contributed by <a href="http://sourceforge.net/users/heschulz">Helge Schulz</a>
 	 *
@@ -1674,7 +1674,7 @@ public abstract class Dialect implements ConversionContext {
 	 * @return The Dialect's preferred SQLExceptionConverter, or null to
 	 * indicate that the default {@link SQLExceptionConverter} should be used.
 	 *
-	 * @see {@link #buildSQLExceptionConversionDelegate()}
+	 * @see #buildSQLExceptionConversionDelegate()
 	 * @deprecated {@link #buildSQLExceptionConversionDelegate()} should be
 	 * overridden instead.
 	 */
@@ -1687,11 +1687,11 @@ public abstract class Dialect implements ConversionContext {
 	 * Build an instance of a {@link SQLExceptionConversionDelegate} for
 	 * interpreting dialect-specific error or SQLState codes.
 	 * <p/>
-	 * When {@link #buildSQLExceptionConverter} returns null, the default 
+	 * When {@link #buildSQLExceptionConverter} returns null, the default
 	 * {@link SQLExceptionConverter} is used to interpret SQLState and
 	 * error codes. If this method is overridden to return a non-null value,
 	 * the default {@link SQLExceptionConverter} will use the returned
-	 * {@link SQLExceptionConversionDelegate} in addition to the following 
+	 * {@link SQLExceptionConversionDelegate} in addition to the following
 	 * standard delegates:
 	 * <ol>
 	 *     <li>a "static" delegate based on the JDBC 4 defined SQLException hierarchy;</li>
@@ -1701,7 +1701,7 @@ public abstract class Dialect implements ConversionContext {
 	 * <p/>
 	 * It is strongly recommended that specific Dialect implementations override this
 	 * method, since interpretation of a SQL error is much more accurate when based on
-	 * the a vendor-specific ErrorCode rather than the SQLState.
+	 * the vendor-specific ErrorCode rather than the SQLState.
 	 * <p/>
 	 * Specific Dialects may override to return whatever is most appropriate for that vendor.
 	 *
@@ -2454,7 +2454,7 @@ public abstract class Dialect implements ConversionContext {
 
 	/**
 	 * Does this dialect require that references to result variables
-	 * (i.e, select expresssion aliases) in an ORDER BY clause be
+	 * (i.e, select expression aliases) in an ORDER BY clause be
 	 * replaced by column positions (1-origin) as defined
 	 * by the select clause?
 
@@ -2877,7 +2877,7 @@ public abstract class Dialect implements ConversionContext {
 	/**
 	 * By default interpret this based on DatabaseMetaData.
 	 *
-	 * @return
+	 * @return The NameQualifierSupport.
 	 */
 	public NameQualifierSupport getNameQualifierSupport() {
 		return null;
