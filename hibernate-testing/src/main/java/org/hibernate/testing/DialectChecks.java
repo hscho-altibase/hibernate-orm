@@ -6,11 +6,7 @@
  */
 package org.hibernate.testing;
 
-import org.hibernate.dialect.DB2Dialect;
-import org.hibernate.dialect.Dialect;
-import org.hibernate.dialect.MySQLDialect;
-import org.hibernate.dialect.PostgreSQL81Dialect;
-import org.hibernate.dialect.SybaseDialect;
+import org.hibernate.dialect.*;
 
 /**
  * Container class for different implementation of the {@link DialectCheck} interface.
@@ -267,7 +263,8 @@ abstract public class DialectChecks {
 				dialect instanceof DB2Dialect ||
 				dialect instanceof PostgreSQL81Dialect ||
 				dialect instanceof SybaseDialect ||
-				dialect instanceof MySQLDialect
+				dialect instanceof MySQLDialect ||
+				dialect instanceof AltibaseDialect
 			);
 		}
 	}

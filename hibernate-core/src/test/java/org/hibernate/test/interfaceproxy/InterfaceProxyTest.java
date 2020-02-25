@@ -9,8 +9,10 @@ package org.hibernate.test.interfaceproxy;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 
+import org.hibernate.dialect.AltibaseDialect;
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.RequiresDialectFeature;
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
 
@@ -29,6 +31,7 @@ public class InterfaceProxyTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(AltibaseDialect.class)
 	@RequiresDialectFeature(
 			value = DialectChecks.SupportsExpectedLobUsagePattern.class,
 			comment = "database/driver does not support expected LOB usage pattern"

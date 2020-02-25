@@ -17,6 +17,7 @@ import java.util.Map;
 import org.hibernate.QueryException;
 import org.hibernate.Session;
 import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.AltibaseDialect;
 import org.hibernate.dialect.DB2Dialect;
 import org.hibernate.dialect.H2Dialect;
 import org.hibernate.dialect.HSQLDialect;
@@ -878,7 +879,8 @@ public class HQLTest extends QueryTranslatorTestCase {
 	@Test
 	public void testGroupByFunction() {
 		if ( getDialect() instanceof Oracle8iDialect ) return; // the new hiearchy...
-		if ( getDialect() instanceof PostgreSQLDialect || getDialect() instanceof PostgreSQL81Dialect ) return;
+		if ( getDialect() instanceof PostgreSQLDialect || getDialect() instanceof PostgreSQL81Dialect ||
+			 getDialect() instanceof AltibaseDialect) return;
 		if ( getDialect() instanceof TeradataDialect) return;
 		if ( ! H2Dialect.class.isInstance( getDialect() ) ) {
 			// H2 has no year function

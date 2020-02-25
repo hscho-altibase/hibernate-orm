@@ -18,11 +18,13 @@ import org.hibernate.boot.Metadata;
 import org.hibernate.cfg.Environment;
 import org.hibernate.criterion.Property;
 import org.hibernate.criterion.Restrictions;
+import org.hibernate.dialect.AltibaseDialect;
 import org.hibernate.dialect.SybaseASE15Dialect;
 import org.hibernate.dialect.function.SQLFunction;
 import org.hibernate.mapping.Component;
 import org.hibernate.mapping.Formula;
 import org.hibernate.mapping.PersistentClass;
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.type.StandardBasicTypes;
 
 import org.hibernate.testing.FailureExpected;
@@ -74,9 +76,10 @@ public class ComponentTest extends BaseNonConfigCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value = AltibaseDialect.class, comment = "Altibase cannot extract from year")
 	public void testUpdateFalse() {
 		sessionFactory().getStatistics().clear();
-		
+
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
 		User u = new User( "gavin", "secret", new Person("Gavin King", new Date(), "Karbarook Ave") );
@@ -85,7 +88,7 @@ public class ComponentTest extends BaseNonConfigCoreFunctionalTestCase {
 		u.getPerson().setName("XXXXYYYYY");
 		t.commit();
 		s.close();
-		
+
 		assertEquals( 1, sessionFactory().getStatistics().getEntityInsertCount() );
 		assertEquals( 0, sessionFactory().getStatistics().getEntityUpdateCount() );
 
@@ -96,11 +99,12 @@ public class ComponentTest extends BaseNonConfigCoreFunctionalTestCase {
 		s.delete(u);
 		t.commit();
 		s.close();
-		
+
 		assertEquals( 1, sessionFactory().getStatistics().getEntityDeleteCount() );
 	}
-	
+
 	@Test
+	@SkipForDialect(value = AltibaseDialect.class, comment = "Altibase cannot extract from year")
 	public void testComponent() {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -110,7 +114,7 @@ public class ComponentTest extends BaseNonConfigCoreFunctionalTestCase {
 		u.getPerson().changeAddress("Phipps Place");
 		t.commit();
 		s.close();
-		
+
 		s = openSession();
 		t = s.beginTransaction();
 		u = (User) s.get(User.class, "gavin");
@@ -200,6 +204,7 @@ public class ComponentTest extends BaseNonConfigCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value = AltibaseDialect.class, comment = "Altibase cannot extract from year")
 	public void testComponentFormulaQuery() {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -216,8 +221,9 @@ public class ComponentTest extends BaseNonConfigCoreFunctionalTestCase {
 		t.commit();
 		s.close();
 	}
-	
+
 	@Test
+	@SkipForDialect(value = AltibaseDialect.class, comment = "Altibase cannot extract from year")
 	public void testCustomColumnReadAndWrite() {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -227,7 +233,7 @@ public class ComponentTest extends BaseNonConfigCoreFunctionalTestCase {
 		u.getPerson().setHeightInches(HEIGHT_INCHES);
 		s.persist( u );
 		s.flush();
-		
+
 		// Test value conversion during insert
 		// Value returned by Oracle native query is a Types.NUMERIC, which is mapped to a BigDecimalType;
 		// Cast returned value to Number then call Number.doubleValue() so it works on all dialects.
@@ -264,8 +270,9 @@ public class ComponentTest extends BaseNonConfigCoreFunctionalTestCase {
 		t.commit();
 		s.close();
 	}
-	
+
 	@Test
+	@SkipForDialect(value = AltibaseDialect.class, comment = "Altibase cannot extract from year")
 	public void testNamedQuery() {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();

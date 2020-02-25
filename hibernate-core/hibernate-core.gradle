@@ -23,7 +23,7 @@ configurations {
 }
 
 dependencies {
-
+//  implementation files('/home/yjpark/work2/altidev4/altibase_home/lib/Altibase.jar')
     compile( libraries.jpa )
     // Javassist is no longer the default enhancer but still required for other purposes, e.g. Scanning
     compile( libraries.javassist )

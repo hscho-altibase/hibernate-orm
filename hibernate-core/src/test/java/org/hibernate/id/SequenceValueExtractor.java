@@ -14,6 +14,7 @@ import java.sql.SQLException;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.AltibaseDialect;
 import org.hibernate.dialect.DB2Dialect;
 import org.hibernate.dialect.DerbyDialect;
 import org.hibernate.dialect.Dialect;
@@ -40,7 +41,7 @@ public class SequenceValueExtractor {
 		else if ( dialect instanceof DB2Dialect ) {
 			queryString = "values PREVIOUS value for " + sequenceName;
 		}
-		else if ( dialect instanceof Oracle8iDialect ) {
+		else if ( dialect instanceof Oracle8iDialect || dialect instanceof AltibaseDialect) {
 			queryString = "select " + sequenceName + ".currval from dual";
 		}
 		else if ( dialect instanceof SQLServer2012Dialect ) {

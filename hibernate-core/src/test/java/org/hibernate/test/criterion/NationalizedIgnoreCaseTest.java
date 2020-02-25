@@ -14,6 +14,7 @@ import javax.persistence.Table;
 import org.hibernate.Criteria;
 import org.hibernate.annotations.Nationalized;
 import org.hibernate.criterion.Restrictions;
+import org.hibernate.dialect.AltibaseDialect;
 import org.hibernate.dialect.DB2Dialect;
 import org.hibernate.dialect.PostgreSQL81Dialect;
 
@@ -39,6 +40,7 @@ public class NationalizedIgnoreCaseTest extends BaseCoreFunctionalTestCase {
 	}
 	
 	@Test
+	@SkipForDialect(AltibaseDialect.class)
 	public void testIgnoreCaseCriteria() {
 
 		User user1 = new User(1, "Chris");

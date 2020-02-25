@@ -46,6 +46,7 @@ import org.hibernate.criterion.MatchMode;
 import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Restrictions;
 import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.AltibaseDialect;
 import org.hibernate.dialect.DB2Dialect;
 import org.hibernate.dialect.DerbyDialect;
 import org.hibernate.dialect.H2Dialect;
@@ -1376,6 +1377,8 @@ public class FooBarTest extends LegacyTestCase {
 
 	@Test
 	@SkipForDialect( value = H2Dialect.class, comment = "Feature not supported: MVCC=TRUE && FOR UPDATE && JOIN")
+	@SkipForDialect(value = AltibaseDialect.class,
+			comment = "Altibase will occur SQLException. ex) `JOIN is not allowed in SELECT FOR UPDATE statements.` ")
 	public void testQueryLockMode() throws Exception {
 		Session s = openSession();
 		Transaction tx = s.beginTransaction();
@@ -4033,6 +4036,8 @@ public class FooBarTest extends LegacyTestCase {
 
 	@SkipForDialect(value = AbstractHANADialect.class, comment = "HANA currently requires specifying table name by 'FOR UPDATE of t1.c1' if there are more than one tables/views/subqueries in the FROM clause")
 	@SkipForDialect( value = H2Dialect.class, comment = "Feature not supported: MVCC=TRUE && FOR UPDATE && JOIN")
+	@SkipForDialect(value = AltibaseDialect.class,
+			comment = "Altibase will occur SQLException. ex) `JOIN is not allowed in SELECT FOR UPDATE statements.` ")
 	@Test
 	public void testNewSessionLifecycle() throws Exception {
 		Session s = openSession();
@@ -4314,6 +4319,8 @@ public class FooBarTest extends LegacyTestCase {
 
 	@SkipForDialect(value = AbstractHANADialect.class, comment = "HANA currently requires specifying table name by 'FOR UPDATE of t1.c1' if there are more than one tables/views/subqueries in the FROM clause")
 	@SkipForDialect( value = H2Dialect.class, comment = "Feature not supported: MVCC=TRUE && FOR UPDATE && JOIN")
+	@SkipForDialect(value = AltibaseDialect.class,
+			comment = "Altibase will occur SQLException. ex) `JOIN is not allowed in SELECT FOR UPDATE statements.` ")
 	@Test
 	public void testRefresh() throws Exception {
 		final Session s = openSession();

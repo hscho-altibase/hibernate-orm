@@ -17,6 +17,8 @@ import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
+import org.hibernate.dialect.AltibaseDialect;
+import org.hibernate.testing.SkipForDialect;
 import org.junit.Test;
 
 import org.hibernate.Query;
@@ -35,6 +37,7 @@ public class TimePropertyTest extends BaseCoreFunctionalTestCase {
 	private final DateFormat timeFormat = new SimpleDateFormat("HH:mm:ss");
 
 	@Test
+	@SkipForDialect(AltibaseDialect.class)
 	public void testTimeAsDate() {
 		final Entity eOrig = new Entity();
 		Calendar calendar = Calendar.getInstance();
