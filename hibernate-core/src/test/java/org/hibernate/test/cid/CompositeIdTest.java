@@ -20,17 +20,14 @@ import java.util.List;
 import org.hibernate.Hibernate;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
+import org.hibernate.dialect.AltibaseDialect;
 import org.hibernate.dialect.Oracle8iDialect;
-import org.hibernate.dialect.PostgreSQL9Dialect;
-import org.hibernate.dialect.PostgresPlusDialect;
-import org.hibernate.dialect.SQLServer2005Dialect;
 import org.hibernate.dialect.SQLServerDialect;
 import org.hibernate.engine.query.spi.HQLQueryPlan;
 import org.hibernate.exception.SQLGrammarException;
 import org.hibernate.hql.spi.QueryTranslator;
 
 import org.hibernate.testing.SkipForDialect;
-import org.hibernate.testing.SkipForDialects;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
 
@@ -69,6 +66,7 @@ public class CompositeIdTest extends BaseCoreFunctionalTestCase {
 	@Test
 	@SkipForDialect(value = Oracle8iDialect.class, comment = "Cannot count distinct over multiple columns in Oracle")
 	@SkipForDialect(value = SQLServerDialect.class, comment = "Cannot count distinct over multiple columns in SQL Server")
+	@SkipForDialect(value = AltibaseDialect.class, comment = "Cannot count distinct over multiple columns in Altibase")
 	public void testDistinctCountOfEntityWithCompositeId() {
 		// today we do not account for Dialects supportsTupleDistinctCounts() is false.  though really the only
 		// "option" there is to throw an error.

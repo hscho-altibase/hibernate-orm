@@ -11,6 +11,7 @@ import static org.junit.Assert.assertTrue;
 
 import org.hibernate.Session;
 import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.AltibaseDialect;
 import org.hibernate.dialect.Oracle8iDialect;
 import org.hibernate.test.jpa.AbstractJPATest;
 import org.hibernate.testing.SkipForDialect;
@@ -20,8 +21,8 @@ import org.junit.Test;
 /**
  * @author Steve Ebersole
  */
-@SkipForDialect(value = { Oracle8iDialect.class, AbstractHANADialect.class },
-		comment = "Oracle/Hana do not support identity key generation")
+@SkipForDialect(value = { Oracle8iDialect.class, AbstractHANADialect.class, AltibaseDialect.class },
+		comment = "Oracle/Hana/Altibase do not support identity key generation")
 public class MutableNaturalIdTest extends AbstractJPATest {
 	@Override
 	protected Class<?>[] getAnnotatedClasses() {

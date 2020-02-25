@@ -15,6 +15,7 @@ import org.hibernate.Session;
 import org.hibernate.annotations.Nationalized;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.Configuration;
+import org.hibernate.dialect.AltibaseDialect;
 import org.hibernate.dialect.DB2Dialect;
 import org.hibernate.dialect.MySQLDialect;
 import org.hibernate.dialect.PostgreSQL81Dialect;
@@ -39,6 +40,7 @@ import static org.junit.Assert.assertThat;
 @SkipForDialect(value = MySQLDialect.class, comment = "MySQL/MariadB doesn't support nclob")
 @SkipForDialect(value = PostgreSQL81Dialect.class, comment = "PostgreSQL doesn't support nclob")
 @SkipForDialect(value = SybaseDialect.class, comment = "Sybase doesn't support nclob")
+@SkipForDialect(value = AltibaseDialect.class, comment = "Altibase doesn't support nclob")
 public class NationalizedLobFieldTest extends BaseCoreFunctionalTestCase {
 
 	@Override

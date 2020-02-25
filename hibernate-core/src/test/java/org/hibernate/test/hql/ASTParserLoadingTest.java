@@ -29,6 +29,7 @@ import org.hibernate.TypeMismatchException;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.cfg.Environment;
 import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.AltibaseDialect;
 import org.hibernate.dialect.CUBRIDDialect;
 import org.hibernate.dialect.DB2Dialect;
 import org.hibernate.dialect.DerbyDialect;
@@ -2661,6 +2662,8 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value = AltibaseDialect.class,
+			comment = "Altibase does not support extract from date. ex) `select TO_CHAR(EXTRACT(YEAR from current_date))`")
 	public void testStr() {
 		Session session = openSession();
 		Transaction txn = session.beginTransaction();
@@ -2721,6 +2724,8 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value = AltibaseDialect.class,
+			comment = "Altibase does not support extract from date. ex) `select EXTRACT(SECOND from current_timestamp)`")
 	public void testExtract() {
 		Session session = openSession();
 		Transaction txn = session.beginTransaction();
@@ -3678,6 +3683,8 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value = AltibaseDialect.class,
+			comment = "Altibase cannot use three arguments in LOCATE. ex) `where locate('abc', animal0_.description, 2)=2`")
 	public void testEJBQLFunctions() throws Exception {
 		Session session = openSession();
 		Transaction t = session.beginTransaction();
