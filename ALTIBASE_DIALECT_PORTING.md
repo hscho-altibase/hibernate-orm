@@ -18,14 +18,16 @@ The Hibernate official distribution site provides hibernate core library for eac
 ## AltibaseDialect.java compile
 The AltibaseDialect.java file for Hibernate version can be downloaded from the link below. Starting with Hibernate 4.2, you need to compile with AltibaseLimitHandler.java.
 
-| Hibernate Ver  |AltibaseDialect.java | AltibaseLimitHandler.java | Required JDK ver |
-|---|---|---|---|
-|3.6|https://github.com/ALTIBASE/hibernate-orm/blob/3.6/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java |   | 1.5 |
-|4.2|https://github.com/ALTIBASE/hibernate-orm/blob/4.2/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/4.2/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java  | 1.6  |
-|4.3|https://github.com/ALTIBASE/hibernate-orm/blob/4.3/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/4.3/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   | 1.6 |
-|5.0|https://github.com/ALTIBASE/hibernate-orm/blob/5.0/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/5.0/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   | 1.6 |
-|5.1|https://github.com/ALTIBASE/hibernate-orm/blob/5.1/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/5.1/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   | 1.6 |
-|5.2(master)|https://github.com/ALTIBASE/hibernate-orm/blob/master/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/master/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   | 1.8|
+| Hibernate Ver  |AltibaseDialect.java | AltibaseLimitHandler.java | SequenceInformationExtractorAltibaseDatabaseImpl.java | Required JDK ver |
+|---|---|---|---|---|
+|3.6|https://github.com/ALTIBASE/hibernate-orm/blob/3.6/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java |   |   | 1.5 |
+|4.2|https://github.com/ALTIBASE/hibernate-orm/blob/4.2/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/4.2/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java  |   | 1.6  |
+|4.3|https://github.com/ALTIBASE/hibernate-orm/blob/4.3/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/4.3/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   |   |  1.6 |
+|5.0|https://github.com/ALTIBASE/hibernate-orm/blob/5.0/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/5.0/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   |   | 1.6 |
+|5.1|https://github.com/ALTIBASE/hibernate-orm/blob/5.1/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/5.1/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   |   | 1.6 |
+|5.2|https://github.com/ALTIBASE/hibernate-orm/blob/5.2/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/5.2/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   |   | 1.8|
+|5.3|https://github.com/ALTIBASE/hibernate-orm/blob/5.3/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/5.3/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java   |   | 1.8|
+|5.4(master)|https://github.com/ALTIBASE/hibernate-orm/blob/master/hibernate-core/src/main/java/org/hibernate/dialect/AltibaseDialect.java | https://github.com/ALTIBASE/hibernate-orm/blob/master/hibernate-core/src/main/java/org/hibernate/dialect/pagination/AltibaseLimitHandler.java  | https://github.com/ALTIBASE/hibernate-orm/blob/master/hibernate-core/src/main/java/org/hibernate/tool/schema/extract/internal/SequenceInformationExtractorAltibaseDatabaseImpl.java | 1.8|
 
 1. hibernate jar uncompress
 
@@ -35,15 +37,17 @@ The AltibaseDialect.java file for Hibernate version can be downloaded from the l
         cd to-the-java-file-directory
         jar xvf hibernate-core-x.x.x.Final.jar
     
-2. Compile AltibaseLimitHandler.java and AltibaseDialect.java files.
+2. Compile AltibaseLimitHandler.java, AltibaseDialect.java and SequenceInformationExtractorAltibaseDatabaseImpl.java files.
 
         javac -d . -cp . AltibaseLimitHandler.java
         javac -d . -cp . AltibaseDialect.java
+        javac -d . -cp . SequenceInformationExtractorAltibaseDatabaseImpl.java
     
-3. When compilation is completed, the following two class files are created under the current directory.
+3. When compilation is completed, the following class files will be created under the current directory.
 
         ./org/hibernate/dialect/AltibaseDialect.class
         ./org/hibernate/dialect/pagination/AltibaseLimitHandler.class
+        ./org/hibernate/tool/schema/extract/internal/SequenceInformationExtractorAltibaseDatabaseImpl.class
 
 ### Port the AltibaseDialect class to a Hibernate jar file
 Make a new jar file using the newly compiled AltibaseDialect classes.
