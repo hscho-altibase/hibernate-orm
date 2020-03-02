@@ -11,11 +11,13 @@ import java.util.Properties;
 
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.Environment;
+import org.hibernate.dialect.AltibaseDialect;
 import org.hibernate.engine.jdbc.connections.spi.ConnectionProvider;
 import org.hibernate.service.spi.Configurable;
 import org.hibernate.service.spi.Startable;
 import org.hibernate.service.spi.Stoppable;
 
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.junit4.BaseUnitTestCase;
 import org.junit.Test;
 
@@ -24,6 +26,7 @@ import static org.junit.Assert.assertEquals;
 /**
  * @author Steve Ebersole
  */
+@SkipForDialect( AltibaseDialect.class )
 public abstract class BaseTransactionIsolationConfigTest extends BaseUnitTestCase {
 	protected abstract ConnectionProvider getConnectionProviderUnderTest();
 
@@ -31,6 +34,7 @@ public abstract class BaseTransactionIsolationConfigTest extends BaseUnitTestCas
 	}
 
 	@Test
+	@SkipForDialect( AltibaseDialect.class )
 	public void testSettingIsolationAsNumeric() throws Exception {
 		Properties properties = Environment.getProperties();
 		augmentConfigurationSettings( properties );
@@ -55,6 +59,7 @@ public abstract class BaseTransactionIsolationConfigTest extends BaseUnitTestCas
 	}
 
 	@Test
+	@SkipForDialect( AltibaseDialect.class )
 	public void testSettingIsolationAsNumericString() throws Exception {
 		Properties properties = Environment.getProperties();
 		augmentConfigurationSettings( properties );
@@ -79,6 +84,7 @@ public abstract class BaseTransactionIsolationConfigTest extends BaseUnitTestCas
 	}
 
 	@Test
+	@SkipForDialect( AltibaseDialect.class )
 	public void testSettingIsolationAsName() throws Exception {
 		Properties properties = Environment.getProperties();
 		augmentConfigurationSettings( properties );
@@ -103,6 +109,7 @@ public abstract class BaseTransactionIsolationConfigTest extends BaseUnitTestCas
 	}
 
 	@Test
+	@SkipForDialect( AltibaseDialect.class )
 	public void testSettingIsolationAsNameAlt() throws Exception {
 		Properties properties = Environment.getProperties();
 		augmentConfigurationSettings( properties );

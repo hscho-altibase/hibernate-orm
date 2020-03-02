@@ -15,6 +15,7 @@ import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.OneToMany;
+import javax.persistence.Table;
 
 import org.hibernate.annotations.NaturalId;
 import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
@@ -72,6 +73,7 @@ public class NaturalIdEqualsHashCodeEntityTest extends BaseEntityManagerFunction
 
 	//tag::entity-pojo-natural-id-equals-hashcode-example[]
 	@Entity(name = "Library")
+	@Table(name = "\"Library\"")
 	public static class Library {
 
 		@Id

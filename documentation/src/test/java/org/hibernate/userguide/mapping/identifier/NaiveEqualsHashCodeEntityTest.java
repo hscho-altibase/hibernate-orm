@@ -15,6 +15,7 @@ import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.OneToMany;
+import javax.persistence.Table;
 
 import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
 
@@ -104,6 +105,7 @@ public class NaiveEqualsHashCodeEntityTest extends BaseEntityManagerFunctionalTe
 
 	//tag::entity-pojo-naive-equals-hashcode-example[]
 	@Entity(name = "Library")
+	@Table(name = "\"Library\"")
 	public static class Library {
 
 		@Id

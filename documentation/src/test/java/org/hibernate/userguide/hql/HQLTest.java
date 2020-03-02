@@ -24,6 +24,7 @@ import javax.persistence.TypedQuery;
 import org.hibernate.CacheMode;
 import org.hibernate.ScrollableResults;
 import org.hibernate.Session;
+import org.hibernate.dialect.AltibaseDialect;
 import org.hibernate.dialect.H2Dialect;
 import org.hibernate.dialect.MySQL5Dialect;
 import org.hibernate.dialect.Oracle8iDialect;
@@ -1083,6 +1084,7 @@ public class HQLTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect( AltibaseDialect.class )
 	public void test_hql_numeric_arithmetic_example_2() {
 		doInJPA( this::entityManagerFactory, entityManager -> {
 			//tag::hql-numeric-arithmetic-example[]
@@ -1099,6 +1101,7 @@ public class HQLTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect( AltibaseDialect.class )
 	public void test_hql_numeric_arithmetic_example_3() {
 		doInJPA( this::entityManagerFactory, entityManager -> {
 			//tag::hql-numeric-arithmetic-example[]
@@ -1257,6 +1260,7 @@ public class HQLTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect( AltibaseDialect.class )
 	public void test_hql_locate_function_example() {
 		doInJPA( this::entityManagerFactory, entityManager -> {
 			//tag::hql-locate-function-example[]
@@ -1270,6 +1274,7 @@ public class HQLTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect( AltibaseDialect.class )
 	public void test_hql_abs_function_example() {
 		doInJPA( this::entityManagerFactory, entityManager -> {
 			//tag::hql-abs-function-example[]
@@ -1394,6 +1399,7 @@ public class HQLTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect( AltibaseDialect.class )
 	public void test_hql_extract_function_example() {
 		doInJPA( this::entityManagerFactory, entityManager -> {
 			//tag::hql-extract-function-example[]
@@ -1407,6 +1413,7 @@ public class HQLTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect( AltibaseDialect.class )
 	public void test_hql_year_function_example() {
 		doInJPA( this::entityManagerFactory, entityManager -> {
 			//tag::hql-year-function-example[]

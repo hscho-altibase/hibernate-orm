@@ -6,6 +6,8 @@
  */
 package org.hibernate.userguide.proxy.tuplizer;
 
+import org.hibernate.dialect.AltibaseDialect;
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
 
@@ -18,6 +20,7 @@ import static org.junit.Assert.assertNotNull;
  */
 public class TuplizerTest extends BaseCoreFunctionalTestCase {
 	@Test
+	@SkipForDialect( AltibaseDialect.class )
 	public void testEntityTuplizer() throws Exception {
 		//tag::entity-tuplizer-dynamic-proxy-example[]
 		Cuisine _cuisine = doInHibernateSessionBuilder(

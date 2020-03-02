@@ -154,6 +154,7 @@ public class SimpleEntityTest extends BaseEntityManagerFunctionalTestCase {
 
 	//tag::entity-pojo-set-mapping-example[]
 	@Entity(name = "Library")
+	@Table(name = "\"Library\"")
 	public static class Library {
 
 		@Id
